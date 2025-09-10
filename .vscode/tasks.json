@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Run Step02 tests",
+			"command": "conda run --live-stream --name codesight-py312 python -m pytest -q test/steps/step02",
+			"args": [],
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": [
+				"$pytest"
+			]
+		}
+	]
+}

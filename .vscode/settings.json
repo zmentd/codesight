@@ -1,0 +1,54 @@
+{
+    "python.defaultInterpreterPath": "D:\\Programs\\anaconda3\\envs\\codesight\\python.exe",
+    "python.terminal.activateEnvironment": true,
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.envFile": "${workspaceFolder}/.env",
+    "python.testing.cwd": "${workspaceFolder}",  // fixed
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestPath": "D:\\Programs\\anaconda3\\envs\\codesight\\Scripts\\pytest.exe",
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestArgs": [
+        "test"
+    ],
+    "[python]": {
+        "editor.formatOnSave": false,
+        "editor.defaultFormatter": "ms-python.python",
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    },
+    "python.analysis.extraPaths": ["./src", "./test"],
+    "python.analysis.autoSearchPaths": false,
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUnusedImport": "information",
+        "reportUnusedVariable": "information"
+    },
+    "isort.args": ["--profile", "black"],
+    "flake8.args": ["--config=setup.cfg"],
+    "mypy-type-checker.args": [
+        "--config-file=pyproject.toml"
+    ],
+    "pylint.args": ["--rcfile=.pylintrc"],
+    "python-envs.pythonProjects": [
+        {
+            "path": "",
+            "envManager": "ms-python.python:conda",
+            "packageManager": "ms-python.python:conda"
+        }
+    ],
+    // Java settings - exclude test-projects from analysis
+    "java.compile.nullAnalysis.mode": "disabled",
+    "java.configuration.detectJdksAtStart": false,
+    "java.import.gradle.enabled": false,
+    "java.import.maven.enabled": false,
+    "java.autobuild.enabled": false,
+    "java.maxConcurrentBuilds": 1,
+    "java.configuration.workspaceCacheLimit": 90,
+    "search.exclude": {
+        "**/test/test-projects/**": true
+    },
+    "java.project.sourcePaths": [],
+    "java.project.referencedLibraries": [],
+    "redhat.telemetry.enabled": false
+}

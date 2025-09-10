@@ -1,0 +1,40 @@
+[MASTER]
+extension-pkg-allow-list=
+init-hook='import sys; from pathlib import Path; sys.path[:0] = [str(Path().resolve() / "src"), str(Path().resolve() / "test")]'
+ignore-paths=test/test-projects,src/steps/step02/parsers/parsetab.py
+
+[MESSAGES CONTROL]
+# Disable warnings that are common in test files
+disable=
+    unused-import,
+    unused-variable,
+    unused-argument,
+    wrong-import-order,
+    wrong-import-position,
+    protected-access,
+    unspecified-encoding,
+    missing-function-docstring,
+    missing-class-docstring,
+    missing-module-docstring,
+    too-many-locals,
+    too-many-statements,
+    redefined-outer-name,
+    import-outside-toplevel,
+    trailing-whitespace,
+    line-too-long
+
+[FORMAT]
+max-line-length=100
+
+[DESIGN]
+max-args=10
+max-locals=20
+max-returns=6
+max-branches=15
+max-statements=50
+
+[SIMILARITIES]
+min-similarity-lines=10
+
+[BASIC]
+good-names=i,j,k,ex,Run,_,f,e

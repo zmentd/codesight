@@ -1,0 +1,291 @@
+# CT-HR-STORM Project Configuration for CodeSight Analysis
+# Project-specific overrides for the STORM Human Resources Management System
+
+# ==============================================================================
+# PROJECT CONFIGURATION
+# ==============================================================================
+project:
+  name: "ct-hr-storm"
+  description: "STORM (Staff Training Operations Resource Management) - NBC Universal HR System for television and media production crew scheduling, resource management, and payroll processing"
+  source_path: "../../ct-hr-storm"
+  output_path: "projects/ct-hr-storm/output"
+
+# ==============================================================================
+# LLM OVERRIDES
+# ==============================================================================
+llm:
+  provider: "kong_aws"
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  max_tokens: 8000
+  temperature: 0.05
+
+# ==============================================================================
+# PIPELINE STEPS OVERRIDES
+# ==============================================================================
+steps:
+  step01:
+    include_extensions: [".java", ".jsp", ".jspx", ".vbs", ".js", ".css", ".html", ".xml", ".properties", ".yml", ".yaml", ".sql", ".tld"]
+    exclude_patterns: 
+      - "**/target/**"
+      - "**/build/**" 
+      - "**/test/**"
+      - "**/node_modules/**"
+      - "**/.git/**"
+      - "**/bin/**"
+      - "**/dist/**"
+      - "**/.DS_Store"
+      - "**/.vscode/**"
+      - "**/.settings/**"
+    max_file_size_mb: 30
+    enable_framework_detection: true
+    framework_confidence_threshold: 0.8
+
+  step02:
+    enable_symbol_resolution: true
+    parse_javadoc: true
+    extract_method_bodies: true
+    confidence_threshold: 0.85
+    timeout_per_file_seconds: 45
+
+  step04:
+    enable_spring_analysis: false
+    enable_hibernate_analysis: false
+    enable_struts_analysis: true
+    config_file_patterns:
+      - "**/struts.xml"
+      - "**/struts-config.xml" 
+      - "**/web.xml"
+      - "**/validation.xml"
+      - "**/validator-rules.xml"
+      - "**/tiles-defs.xml"
+      - "**/log4j.xml"
+      - "**/*.properties"
+      - "**/quartz.properties"
+    pattern_confidence_threshold: 0.75
+
+  step05:
+    batch_size: 3
+    max_context_length: 12000
+    confidence_threshold: 0.7
+    enable_business_logic_extraction: true
+    enable_domain_classification: true
+    retry_attempts: 3
+
+# ==============================================================================
+# CLASSIFICATION OVERRIDES
+# ==============================================================================
+classification:
+  layers:
+    - "UI"
+    - "Service"
+    - "Database"
+    - "Integration"
+    - "Configuration"
+    - "Utility"
+    - "Other"
+  confidence_threshold: 0.6
+  require_dual_match: true
+  fallback_layer: "Other"
+
+# ==============================================================================
+# LANGUAGE PATTERNS OVERRIDES
+# ==============================================================================
+languages_patterns:
+  fallback:
+    UI: ["*Controller*", "*Handler*", "*Servlet*", "*.jsp", "*.js", "*.html", "*.css", "*View*"]
+    Service: ["*Service*", "*Manager*", "*Processor*", "*Business*", "*Logic*", "*Workflow*"]
+    Database: ["*DAO*", "*Repository*", "*Entity*", "*Model*", "*Mapper*"]
+    Integration: ["*Client*", "*Connector*", "*Adapter*", "*Gateway*", "*API*"]
+    Configuration: ["*.properties", "*.xml", "*.yaml", "*.yml", "*Config*", "*Configuration*"]
+    Utility: ["*Util*", "*Helper*", "*Common*", "*Shared*"]
+
+  java:
+    indicators:
+      UI: 
+        - "Action"
+        - "Servlet"
+        - "Handler"
+        - "@WebServlet"
+        - "*Controller*"
+        - "XHTMLHandler"
+        - "XHTMLInterface"
+        - "XHTMLEncoder"
+      Service:
+        - "Manager"
+        - "Handler"
+        - "@Service"
+        - "*Business*"
+        - "*Processor*"
+        - "*Workflow*"
+      Database:
+        - "DAO"
+        - "Mgr"
+        - "@Entity"
+        - "*Repository*"
+        - "*Mapper*"
+      Integration:
+        - "Client"
+        - "Adapter"
+        - "Gateway"
+        - "*GIS*"
+        - "*WebService*"
+        - "*I213*"
+        - "*I70*" 
+        - "*I90*"
+        - "*NetRM*"
+        - "*Quartz*"
+        - "ActiveXObject"
+        - "Microsoft.XMLHTTP"
+      Configuration:
+        - "@Configuration"
+        - "@ConfigurationProperties"
+    package_patterns:
+      UI: 
+        - "com.nbcuni.dcss.storm.**.action.**"
+        - "com.nbcuni.dcss.storm.**.servlet.**"
+        - "com.nbcuni.dcss.storm.isl.xhtml.**"
+      Service:
+        - "com.nbcuni.dcss.storm.asl.**"
+        - "com.nbcuni.dcss.storm.gsl.**"
+      Database:
+        - "com.nbcuni.dcss.storm.dsl.**"
+        - "com.nbcuni.dcss.storm.**.dao.**"
+      Integration:
+        - "com.nbcuni.dcss.storm.gis.**"
+        - "com.nbcuni.dcss.storm.**.client.**"
+        - "com.nbcuni.dcss.storm.dsl._i213srvc.**"
+        - "com.nbcuni.dcss.storm.dsl._i70srvc.**"
+        - "com.nbcuni.dcss.storm.dsl._i90srvc.**"
+        - "com.nbcuni.dcss.storm.dsl._netrmhandlers.**"
+        - "com.nbcuni.dcss.storm.quartz.**"
+      Configuration:
+        - "com.nbcuni.dcss.storm.isl.config.**"
+      Utility:
+        - "com.nbcuni.dcss.storm.isl.utils.**"
+
+  javascript:
+    indicators:
+      UI: 
+        - "Component"
+        - "View"
+        - "Page"
+        - "Route"
+        - "ActiveXObject"
+        - "Microsoft.XMLHTTP"
+        - "EXCEL.application"
+      Service: 
+        - "Service"
+        - "API"
+        - "Handler"
+        - "Manager"
+      Database: 
+        - "Model"
+        - "Schema"
+        - "Repository"
+      Integration: 
+        - "Client"
+        - "Adapter"
+        - "Connector"
+        - "ActiveXObject"
+    path_patterns:
+      UI: ["**/components/**", "**/pages/**"]
+      Service: ["**/services/**"]
+      Database: ["**/models/**"]
+      Integration: ["**/api/**"]
+
+  jsp:
+    indicators:
+      UI: 
+        - "<%@"
+        - "<%="
+        - "<%!"
+        - "<jsp:"
+        - "<c:"
+        - "<f:"
+        - "<html>"
+        - "<body>"
+        - "ActiveXObject"
+        - "Microsoft.XMLHTTP"
+        - "EXCEL.application"
+      Service: 
+        - "<%"
+        - "import="
+        - "session."
+        - "request."
+      Database: 
+        - "sql"
+        - "jdbc"
+        - "connection"
+        - "resultset"
+      Integration: 
+        - "client"
+        - "webservice"
+        - "api"
+        - "ActiveXObject"
+    path_patterns:
+      UI: ["**/*.jsp", "**/*.jspx"]
+
+  vbscript:
+    indicators:
+      UI: 
+        - "SCRIPT FOR="
+        - "EVENT="
+        - "FOR=window EVENT="
+        - "FOR=Button"
+        - "language=vbscript"
+        - "LANGUAGE=VBScript"
+        - "Sub "
+        - "Function "
+        - "Dim "
+    path_patterns:
+      UI: ["**/*.jsp", "**/*.jspx", "**/*.html", "**/*.htm"]
+
+# ==============================================================================
+# FRAMEWORKS OVERRIDES  
+# ==============================================================================
+frameworks:
+  struts:
+    indicators: 
+      - "Action"
+      - "ActionForm"
+      - "struts"
+      - "StormSimpleAction"
+      - "extends ActionSupport"
+    layer_mapping:
+      "Action": "UI"
+      "ActionForm": "UI"
+      "Handler": "Service"
+      "Manager": "Service"
+      "DAO": "Database"
+      "Service": "Service"
+      "Exception": "Utility"
+    config_files: 
+      - "struts.xml"
+      - "struts-config.xml"
+      - "web.xml"
+      - "validation.xml"
+      - "validator-rules.xml"
+      - "tiles-defs.xml"
+  
+  jee:
+    indicators:
+      - "@Stateless"
+      - "@Stateful" 
+      - "@Entity"
+      - "@WebServlet"
+      - "@EJB"
+      - "HttpServlet"
+    layer_mapping:
+      "@WebServlet": "UI"
+      "@ManagedBean": "UI"
+      "@Stateless": "Service"
+      "@Stateful": "Service"
+      "@Entity": "Database"
+      "@EJB": "Service"
+      "@MessageDriven": "Integration"
+      "@WebService": "Integration"
+    config_files:
+      - "web.xml"
+      - "ejb-jar.xml"
+      - "persistence.xml"
+      - "application.xml"

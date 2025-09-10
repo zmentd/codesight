@@ -1,0 +1,16 @@
+{
+    "recommendations": [
+        "ms-python.python",
+        "ms-python.mypy-type-checker",
+        "ms-python.flake8",
+        "ms-python.pylint",
+        "ms-python.isort"
+    ],
+    "unwantedRecommendations": [
+        "redhat.java",
+        "vscjava.vscode-java-pack",
+        "vscjava.vscode-java-debug",
+        "vscjava.vscode-maven",
+        "vscjava.vscode-gradle"
+    ]
+}

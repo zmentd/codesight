@@ -1,0 +1,519 @@
+# CodeSight AI-Powered Reverse Engineering Pipeline Configuration
+# Version: 1.0
+# Base configuration with sensible defaults
+
+# ==============================================================================
+# PROJECT CONFIGURATION
+# ==============================================================================
+project:
+  default_source_path: "projects/{project_name}/source"
+  default_output_path: "projects/{project_name}/output"
+  enable_project_overrides: true
+  supported_languages: ["java", "jsp", "javascript", "vbscript", "xml", "properties", "yaml"]
+
+# ==============================================================================
+# LLM CONFIGURATION  
+# ==============================================================================
+llm:
+  # Provider selection - Choose which LLM provider to use
+  provider: "kong_aws"  # Options: "ollama", "openai", "kong_aws", "kong_azure", "kong_gcp"
+  
+  # Request configuration (applies to all providers)
+  temperature: 0.1
+  max_tokens: 4000
+  top_p: 0.9
+  json_mode: true            # new
+  citation_required: true    # new
+  abstain_min_confidence: 0.5  # new
+
+  # NBCU Kong Gateway Providers
+  kong_aws:
+    base_url: "https://api-pub.dev.developer.nbcuni.com/aigateway/aws"
+    model: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    timeout: 300
+    max_retries: 3
+    retry_delay: 1.0
+    available_models:
+      - "anthropic.claude-3-5-sonnet-20241022-v2:0"
+      - "anthropic.claude-3-5-haiku-20241022-v1:0"
+      - "anthropic.claude-3-opus-20240229-v1:0"
+      - "amazon.titan-text-express-v1"
+      - "cohere.command-text-v14"
+      - "ai21.j2-ultra-v1"
+      - "meta.llama2-70b-chat-v1"
+      - "mistral.mistral-7b-instruct-v0:2"
+  
+  kong_azure:
+    base_url: "https://api-pub.dev.developer.nbcuni.com/aigateway/azure"
+    model: "gpt-4o"
+    timeout: 300
+    max_retries: 3
+    retry_delay: 1.0
+    available_models:
+      - "gpt-4o"
+      - "gpt-4o-mini"
+      - "gpt-3.5-turbo"
+      - "text-embedding-ada-002"
+  
+  kong_gcp:
+    base_url: "https://api-pub.dev.developer.nbcuni.com/aigateway/gcp"
+    model: "gemini-1.5-pro-002"
+    timeout: 300
+    max_retries: 3
+    retry_delay: 1.0
+    available_models:
+      - "gemini-1.5-pro-002"
+      - "gemini-1.5-flash-002"
+      - "text-bison-001"
+
+  # Fallback providers
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "llama3.1:70b"
+    timeout: 300
+  
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4"
+    timeout: 300
+
+# ==============================================================================
+# PIPELINE STEPS CONFIGURATION
+# ==============================================================================
+
+steps:
+  step01:
+    include_extensions: [".java", ".jsp", ".jspx", ".vbs", ".xml", ".properties", ".yml", ".yaml"]
+    exclude_patterns: ["**/target/**", "**/build/**", "**/test/**", "**/node_modules/**"]
+    max_file_size_mb: 10
+    enable_framework_detection: true
+    framework_confidence_threshold: 0.7
+    build_parsers_optional: false   # new
+  
+  step02:
+    java_parser_jar_path: "lib/javaparser-core-3.25.1.jar"
+    enable_symbol_resolution: true
+    parse_javadoc: true
+    extract_method_bodies: true
+    confidence_threshold: 0.9
+    timeout_per_file_seconds: 30
+  
+  step03:
+    enabled: true
+    
+    # Model configuration
+    models:
+      primary: "microsoft/codebert-base"  # Code-specific model
+      fallback: "sentence-transformers/all-MiniLM-L6-v2"  # General text
+      dimension: 768
+      device: "cpu"
+      batch_size: 32
+      max_sequence_length: 512
+    
+    # FAISS configuration  
+    faiss:
+      index_type: "IndexFlatIP"
+      dimension: 768
+      memory_mapping: true
+      similarity_threshold: 0.7
+      max_results_per_query: 20
+      metric: "ip"      # new
+    
+    # Storage configuration (Unix paths, relative to project root)
+    storage:
+      embeddings_directory: "projects/{project_name}/embeddings"
+      preserve_embeddings: true
+      cleanup_on_failure: false
+    
+    # Chunking strategy
+    chunking:
+      method_chunk_size: 200
+      class_chunk_size: 500
+      config_chunk_size: 300
+      jsp_chunk_size: 400
+      overlap_tokens: 20
+    
+    # Enhancement thresholds
+    enhancement:
+      confidence_boost_threshold: 0.05
+      minimum_similarity_score: 0.6
+      max_similar_components: 10
+      clustering_threshold: 0.75
+      min_chunks_for_clustering: 50
+      min_cluster_size: 3        # new
+      cohesion_metric: "silhouette"  # new
+  
+  step04:
+    enable_spring_analysis: true
+    enable_hibernate_analysis: true
+    enable_struts_analysis: true
+    config_file_patterns:
+      - "**/applicationContext*.xml"
+      - "**/spring*.xml"
+      - "**/hibernate*.xml"
+      - "**/persistence.xml"
+      - "**/application*.properties"
+      - "**/application*.yml"
+    pattern_confidence_threshold: 0.8
+    # New toggles
+    enable_servlet: true
+    enable_jaxrs: true
+    enable_jsp_links: true
+    enable_sql_edges_java: true
+    enable_sql_edges_jsp: false
+    enable_sql_edges_sqlfiles: true
+    enable_security_roles: true
+    enable_jsp_security_detection: false
+    enable_trace_enrichment: true
+    enable_business_rules_extraction: false
+    security:
+      patterns: []   # project can override
+    rules:
+      files: ["validation.xml", "validator-rules.xml"]
+
+  step05:
+    llm_provider: "kong_aws"  # Can override global LLM provider
+    batch_size: 5
+    max_context_length: 8000
+    confidence_threshold: 0.6
+    enable_business_logic_extraction: true
+    enable_domain_classification: true
+    retry_attempts: 2
+  
+  step06:
+    enable_service_interactions: true
+    enable_data_flow_analysis: true
+    relationship_confidence_threshold: 0.75
+    max_relationship_depth: 5
+  
+  step07:
+    validate_target_schema: true
+    generate_validation_report: true
+    output_format: "json"
+    pretty_print: true
+    include_debug_info: false
+
+# ==============================================================================
+# THREADING AND PERFORMANCE
+# ==============================================================================
+threading:
+  file_analysis:
+    max_workers: 8
+    timeout_per_task: 300
+    batch_timeout: 1800
+    enable_thread_local_llm: true
+    retry_attempts: 2
+  
+  global:
+    enable_threading: true
+    adaptive_worker_count: true
+    max_content_length: 50000
+    progress_logging: true
+
+performance:
+  memory_limit_gb: 8
+  enable_caching: true
+  cache_embeddings: true
+  cache_ast_results: true
+
+# ==============================================================================
+# PARSERS CONFIGURATION
+# ==============================================================================
+parsers:
+  java:
+    java_parser_jar_path: "lib/javaparser-core-3.25.1.jar"
+    jvm_args: ["-Xmx2g"]
+    frameworks: ["spring", "hibernate", "struts"]
+    source_roots: []
+  
+  jsp:
+    eclipse_jdt_jar_path: "lib/org.eclipse.jdt.core-3.33.0.jar"
+    eclipse_jst_jar_path: "lib/org.eclipse.jst.jsp.core-1.2.800.jar"
+    jvm_args: ["-Xmx2g"]
+    web_frameworks: ["jsf", "spring_mvc", "struts"]
+    taglib_locations: []
+
+# ==============================================================================
+# VALIDATION AND QUALITY
+# ==============================================================================
+validation:
+  enable_schema_validation: true
+  enable_cross_step_validation: true
+  confidence_thresholds:
+    minimum_overall: 0.6
+    step01: 0.95
+    step02: 0.9
+    step03: 0.75
+    step04: 0.8
+    step05: 0.6
+    step06: 0.75
+    step07: 0.95
+
+quality_gates:              # new
+  step01:
+    unix_relative_required: true
+    min_config_accessible_pct: 0.9
+  step02:
+    min_parse_success_pct: 0.7
+    min_route_handler_resolution_pct: 0.5
+    max_unresolved_refs_pct: 0.2
+  step03:
+    min_embedding_coverage_pct: 0.8
+    min_cluster_cohesion: 0.5
+  step04:
+    min_config_parse_success_pct: 0.8
+    min_pattern_confidence: 0.8
+  step05:
+    min_citations_per_capability: 1
+    min_capability_coverage_pct: 0.8
+  step06:
+    min_route_chain_coverage_pct: 0.6
+    require_iam_for_guarded_routes: false
+
+# ==============================================================================
+# OUTPUT CONFIGURATION
+# ==============================================================================
+output:
+  base_path: "output"
+  format: "json"
+  formats: ["json", "csv", "html"]
+  reports_dir: "reports"
+  include_evidence_bundles: false
+  pretty_print: true
+  include_metadata: true
+  generate_reports: true
+  
+  files:
+    final_output: "final_output.json"
+    validation_report: "validation_report.json"
+    processing_log: "processing_log.json"
+    error_report: "error_report.json"
+
+# ==============================================================================
+# PROVENANCE
+# ==============================================================================
+provenance:
+  per_file_confidence_enabled: true
+  confidence_weights:
+    ast: 0.6
+    config: 0.3
+    llm: 0.1
+  evidence_sampling_rate: 1.0
+
+# ==============================================================================
+# DEBUG AND DEVELOPMENT
+# ==============================================================================
+debug:
+  enable_debug_mode: false
+  save_intermediate_outputs: true
+  enable_step_timing: true
+  enable_memory_profiling: false
+  verbose_logging: false
+
+# ==============================================================================
+# DATABASE CONFIGURATION
+# ==============================================================================
+database:
+  # Simple database discovery
+  discovery_pattern: "db/*"          # Look for directories under db/
+  logical_name_pattern: "{directory_name}"  # Use directory name as logical name
+
+# ==============================================================================
+# CLASSIFICATION CONFIGURATION
+# ==============================================================================
+classification:
+  # Architectural layers used for classification
+  layers:
+    - UI
+    - Service
+    - Database
+    - Integration
+    - Configuration
+    - Reporting
+    - Utility
+    - Other
+
+  # Core classification behavior
+  confidence_threshold: 0.5
+  require_dual_match: true          # Require both domain and layer match
+  fallback_layer: "Other"           # Used when classification fails
+
+# ==============================================================================
+# ARCHITECTURAL PATTERNS OVERRIDES
+# ==============================================================================
+architectural_patterns:
+  application: 
+    - "application**"
+  business:
+    - "business**"
+  data_access:
+    - "dao**"
+  security:
+    - "security**"
+    - "auth**"
+    - "authentication**"
+    - "authorization**"
+  shared:
+    - "common**"
+    - "util**"
+
+# ==============================================================================
+# LANGUAGE-SPECIFIC INDICATORS
+# ==============================================================================
+languages_patterns:
+  fallback:
+    UI: ["*Controller*", "*Handler*", "*Servlet*", "*.jsp", "*.js", "*.html", "*View*"]
+    Service: ["*Service*", "*Manager*", "*Processor*", "*Business*", "*Logic*", "*Workflow*"]
+    Database: ["*DAO*", "*Repository*", "*Entity*", "*Model*", "*Mapper*"]
+    Integration: ["*Client*", "*Connector*", "*Adapter*", "*Gateway*", "*API*"]
+    Reporting: ["*Report*", "*Dashboard*", "*Analytics*", "*Chart*", "*Export*", "*PDF*", "*Excel*"]
+    Configuration: ["*.properties", "*.xml", "*.yaml", "*.yml", "*Config*", "*Configuration*"]
+    Utility: ["*Util*", "*Helper*", "*Common*", "*Shared*"]
+
+  java:
+    indicators:
+      UI: ["@Controller", "@RestController", "Servlet", "Handler"]
+      Service: ["@Service", "@Component", "Manager", "Processor"]
+      Database: ["@Repository", "@Entity", "DAO", "Mapper"]
+      Integration: ["@FeignClient", "Client", "Gateway", "Adapter", "ActiveXObject", "Microsoft.XMLHTTP"]
+      Reporting: ["Report", "*Report*", "Dashboard", "Analytics", "Chart", "Export", "PDF", "Excel"]
+      Configuration: ["@Configuration", "@ConfigurationProperties"]
+    package_patterns:
+      UI: ["com.**.controller.**"]
+      Service: ["com.**.service.**"]
+      Database: ["com.**.dao.**", "com.**.repository.**"]
+      Integration: ["com.**.client.**"]
+      Reporting: ["com.**.report.**", "com.**.reports.**", "com.**.dashboard.**", "com.**.analytics.**"]
+      Configuration: ["com.**.config.**"]
+
+  javascript:
+    indicators:
+      UI: ["Component", "View", "Page", "Route", "ActiveXObject", "Microsoft.XMLHTTP", "EXCEL.application"]
+      Service: ["Service", "API", "Handler", "Manager"]
+      Database: ["Model", "Schema", "Repository"]
+      Integration: ["Client", "Adapter", "Connector", "ActiveXObject"]
+      Reporting: ["Report", "Dashboard", "Chart", "Analytics", "Export", "EXCEL.application"]
+    path_patterns:
+      UI: ["**/components/**", "**/pages/**"]
+      Service: ["**/services/**"]
+      Database: ["**/models/**"]
+      Integration: ["**/api/**"]
+      Reporting: ["**/reports/**", "**/dashboards/**", "**/analytics/**"]
+
+  python:
+    indicators:
+      UI: ["view", "handler", "controller", "template"]
+      Service: ["service", "manager", "processor", "business"]
+      Database: ["model", "dao", "repository", "entity"]
+      Integration: ["client", "adapter", "connector", "api"]
+      Reporting: ["report", "dashboard", "chart", "analytics", "export"]
+    path_patterns:
+      UI: ["**/views/**", "**/handlers/**"]
+      Service: ["**/services/**"]
+      Database: ["**/models/**"]
+      Integration: ["**/clients/**"]
+      Reporting: ["**/reports/**", "**/dashboards/**", "**/analytics/**"]
+
+  sql:
+    indicators:
+      Database:
+        - "CREATE TABLE"
+        - "ALTER TABLE"
+        - "DROP TABLE"
+        - "INSERT INTO"
+        - "UPDATE"
+        - "DELETE"
+        - "SELECT"
+        - "CREATE INDEX"
+        - "DROP INDEX"
+        - "CREATE PROCEDURE"
+        - "ALTER PROCEDURE"
+        - "DROP PROCEDURE"
+        - "BEGIN"
+        - "END"
+        - "EXEC"
+    path_patterns:
+      Database:
+        - "**/sql/**"
+        - "**/database/**"
+        - "**/schemas/**"
+        - "**/scripts/**"
+        - "**/migrations/**"
+        - "**/*.sql"
+
+  jsp:
+    indicators:
+      UI: ["<%@", "<%=", "<%!", "<jsp:", "<c:", "<f:", "<html>", "<body>", "ActiveXObject", "Microsoft.XMLHTTP", "EXCEL.application"]
+      Service: ["<%", "import=", "session.", "request."]
+      Database: ["sql", "jdbc", "connection", "resultset"]
+      Integration: ["client", "webservice", "api", "ActiveXObject"]
+      Reporting: ["report", "chart", "dashboard", "export", "EXCEL.application", "ActiveXObject"]
+    file_patterns:
+      UI: ["**/*.jsp", "**/*.jspx"]
+    content_patterns:
+      UI: ["<html", "<body", "<form", "javascript:", "onclick=", "ActiveXObject", "progid:DXImageTransform"]
+      Service: ["<%.*class.*%>", "<%.*import.*%>"]
+
+  vbscript:
+    indicators:
+      UI: ["language=vbscript", "LANGUAGE=VBScript", "Sub ", "Function ", "Dim "]
+    content_patterns:
+      UI: ["<script.*vbscript", "<SCRIPT.*VBScript"]
+
+# ==============================================================================
+# FRAMEWORK-SPECIFIC MAPPING (Overrides or supplements language-level rules)
+# ==============================================================================
+frameworks:
+  spring_boot:
+    indicators: ["@SpringBootApplication", "@RestController", "@Service"]
+    layer_mapping:
+      "@Controller": UI
+      "@RestController": UI
+      "@Service": Service
+      "@Repository": Database
+      "@Component": Service
+      "@Configuration": Configuration
+    config_files: ["application.properties", "application.yml", "application.yaml", "bootstrap.properties", "bootstrap.yml"]
+
+  react:
+    indicators: ["import React", "function Component", "const Component"]
+    layer_mapping:
+      "Component": UI
+      "Hook": Service
+      "Context": Service
+      "Reducer": Service
+    config_files: ["package.json", "webpack.config.js", "babel.config.js", ".babelrc", "tsconfig.json"]
+
+  django:
+    indicators: ["from django", "models.Model", "views."]
+    layer_mapping:
+      "views": UI
+      "models": Database
+      "forms": UI
+      "admin": UI
+      "middleware": Integration
+      "management": Utility
+    config_files: ["settings.py", "urls.py", "wsgi.py", "asgi.py", "requirements.txt", "manage.py"]
+
+  struts:
+    indicators: ["Action", "ActionForm", "struts"]
+    layer_mapping:
+      "Action": UI
+      "ActionForm": UI
+      "DAO": Database
+      "Service": Service
+      "Exception": Utility
+    config_files: ["struts.xml", "struts-config.xml", "web.xml", "validation.xml", "validator-rules.xml"]
+
+  jee:
+    indicators: ["@Stateless", "@Stateful", "@Entity", "@WebServlet", "@EJB"]
+    layer_mapping:
+      "@WebServlet": UI
+      "@ManagedBean": UI
+      "@Stateless": Service
+      "@Stateful": Service
+      "@Entity": Database
+      "@EJB": Service
+      "@MessageDriven": Integration
+      "@WebService": Integration
+    config_files: ["web.xml", "ejb-jar.xml", "persistence.xml", "application.xml", "beans.xml", "faces-config.xml"]

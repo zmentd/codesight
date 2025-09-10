@@ -1,0 +1,73 @@
+version: 1
+disable_existing_loggers: false
+
+# CodeSight logging configuration
+truncate_on_execution: true  # Set to true to clear log files on each execution
+
+formatters:
+  default:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: default
+    stream: ext://sys.stdout
+
+  file:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: default
+    filename: ../codesight.log
+    mode: a
+    encoding: utf-8
+
+loggers:
+  # DEDICATED CONSOLE LOGGER - Use this for messages that should appear on console
+  codesight:
+    level: INFO
+    handlers: [console, file]  # Both console and file for selected messages
+    propagate: false
+
+  # ALL OTHER LOGGERS - File only (no console output)
+  config:
+    level: DEBUG
+    handlers: [file]
+    propagate: false
+
+  core:
+    level: DEBUG
+    handlers: [file]
+    propagate: false
+
+  steps:
+    level: DEBUG
+    handlers: [file]
+    propagate: false
+
+  utils:
+    level: WARNING
+    handlers: [file]
+    propagate: false
+
+  # Specific problematic subloggers
+  core.source_locator:
+    level: DEBUG
+    handlers: [file]
+    propagate: false
+
+  steps.step01.directory_scanner:
+    level: DEBUG
+    handlers: [file]
+    propagate: false
+
+  steps.step01:
+    level: DEBUG
+    handlers: [file]
+    propagate: false
+
+root:
+  level: DEBUG
+  handlers: [file]  # Default to file only - nothing goes to console unless using 'codesight' logger

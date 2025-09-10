@@ -1,0 +1,29 @@
+[flake8]
+max-line-length = 100
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    .conda,
+    build,
+    dist,
+    *.egg-info,
+    .pytest_cache,
+    .mypy_cache,
+    test/test-projects/**,
+    **/parsetab.py
+extend-ignore = 
+    E203,
+    W503,
+    F401,
+    W291,
+    W292,
+    W293,
+    W391,
+    E501,
+    E128,
+    E124,
+    E402
+per-file-ignores =
+    __init__.py:F401
+    test_*.py:F401,F811

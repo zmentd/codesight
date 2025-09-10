@@ -1,0 +1,39 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../ct-hr-storm"
+		},
+		{
+			"path": "../simple-ddl-parser"
+		},
+		{
+			"path": "../../PocketFlow-Tutorial-Codebase-Knowledge"
+		}
+	],
+	"settings": {
+		"python.defaultInterpreterPath": "D:\\Programs\\anaconda3\\envs\\codesight\\python.exe",
+		"python.pythonPath": "D:\\Programs\\anaconda3\\envs\\codesight\\python.exe",
+		"terminal.integrated.env.windows": {
+			"PYTHONPATH": "${workspaceFolder}/src",
+			"CONDA_DEFAULT_ENV": "codesight"
+		},
+		"python.terminal.activateEnvironment": true,
+		"python.condaPath": "D:\\Programs\\anaconda3\\Scripts\\conda.exe",
+		// Java/Language server exclusions for test data
+		"java.compile.nullAnalysis.mode": "disabled",
+		"java.configuration.detectJdksAtStart": false,
+		"java.import.gradle.enabled": false,
+		"java.import.maven.enabled": false,
+		"java.autobuild.enabled": false,
+		"java.maxConcurrentBuilds": 1,
+		"search.exclude": {
+			"**/test/test-projects/**": true
+		},
+		"java.project.sourcePaths": [],
+		"java.project.referencedLibraries": [],
+		"redhat.telemetry.enabled": false
+	}
+}

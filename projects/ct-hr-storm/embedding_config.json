@@ -1,0 +1,16 @@
+{
+  "model_info": {
+    "primary": "microsoft/codebert-base",
+    "fallback": "sentence-transformers/all-MiniLM-L6-v2",
+    "dimension": 768,
+    "device": "cpu",
+    "batch_size": 32,
+    "max_sequence_length": 512
+  },
+  "faiss_config": {
+    "index_type": "IndexFlatIP",
+    "dimension": 768,
+    "similarity_threshold": 0.7
+  },
+  "generation_timestamp": 1755553664.0
+}

@@ -1,0 +1,283 @@
+{
+    "step_metadata": {
+        "step_name": "ast_structural_extraction",
+        "execution_timestamp": "2025-07-28T10:30:00Z",
+        "processing_time_ms": 5000,
+        "files_parsed": 25,
+        "parsing_errors": 0,
+        "java_version_detected": "11",
+        "configuration_sources": [
+            "config.yaml",
+            "config-project.yaml"
+        ]
+    },
+    "project_metadata": {
+        "project_name": "ct-hr-storm",
+        "analysis_date": "2025-07-27T15:44:41.873136",
+        "pipeline_version": "2.0-modular",
+        "languages_detected": [
+            "css",
+            "html",
+            "java",
+            "javascript",
+            "jsp",
+            "properties",
+            "sql",
+            "tld",
+            "xml"
+        ],
+        "frameworks_detected": [],
+        "total_files_analyzed": 4354
+    },
+    "statistics": {
+        "file_inventory_count": 4354,
+        "count_type": {
+            "database": 1752,
+            "config": 66,
+            "source": 1638,
+            "web": 833,
+            "script": 49,
+            "style": 14,
+            "descriptor": 2
+        },
+        "count_language": {
+            "sql": 1752,
+            "xml": 50,
+            "properties": 16,
+            "java": 1638,
+            "jsp": 832,
+            "javascript": 49,
+            "css": 14,
+            "html": 1,
+            "tld": 2
+        },
+        "count_preliminary_component_type": 4354,
+        "count_preliminary_component_type_none": 0,
+        "count_preliminary_component_name": 0,
+        "count_preliminary_component_name_none": 4354,
+        "count_tags": 0,
+        "count_tags_none": 4354,
+        "count_package_layer": {
+            "UI": 898,
+            "Service": 944,
+            "Database": 2172,
+            "Integration": 50,
+            "Configuration": 66,
+            "Utility": 170,
+            "Other": 2,
+            "none": 52
+        },
+        "count_architectural_pattern": {
+            "application": 0,
+            "business": 0,
+            "data_access": 0,
+            "shared": 0,
+            "none": 4354
+        }
+    },
+    "sources": [
+        {
+            "path": "Deployment/Storm_Aux/src",
+            "subdomains": [
+                {
+                    "path": "com/example/service/user",
+                    "type": "source",
+                    "source_location": "Deployment/Storm_Aux/src",
+                    "framework_hints": [],
+                    "preliminary_component_type": "service",
+                    "preliminary_component_name": "user",
+                    "tags": [],
+                    "package_layer": {
+                        "layer": "Database",
+                        "pattern_type": "java_package",
+                        "confidence": 0.9,
+                        "matched_pattern": "com.nbcuni.dcss.storm.dsl.**"
+                    },
+                    "architectural_pattern": {
+                        "pattern": "domain",
+                        "pattern_type": "java_package",
+                        "confidence": 0.0,
+                        "detected_from_directory": false,
+                        "package_name": "com.nbcuni.dcss.storm.dsl.user",
+                        "matched_pattern": "com.nbcuni.dcss.storm.dsl.**"
+                    },
+                    "file_inventory": [
+                        {
+                            "path": "com/example/service/user/UserService.java",
+                            "source_location": "Deployment/Storm_Aux/src",
+                            "size_bytes": 2048,
+                            "language": "java",
+                            "last_modified": "2025-07-27T15:00:00Z",
+                            "type": "java",
+                            "functional_name": "UserService",
+                            "java_details": [
+                                {
+                                    "package_name": "com.example.service",
+                                    "class_name": "UserService",
+                                    "class_type": "class",
+                                    "superclass": null,
+                                    "interfaces": [],
+                                    "modifiers": [
+                                        "public"
+                                    ],
+                                    "annotations": [
+                                        "@Service",
+                                        "@Transactional"
+                                    ],
+                                    "is_inner_class": false,
+                                    "enclosing_class": null,
+                                    "methods": [
+                                        {
+                                            "name": "createUser",
+                                            "visibility": "public",
+                                            "modifiers": [
+                                                "public"
+                                            ],
+                                            "return_type": "User",
+                                            "parameters": [
+                                                {
+                                                    "name": "userData",
+                                                    "type": "UserRequest",
+                                                    "annotations": [
+                                                        "@Valid"
+                                                    ]
+                                                }
+                                            ],
+                                            "exceptions": [
+                                                "UserCreationException"
+                                            ],
+                                            "annotations": [
+                                                {
+                                                    "name": "@Transactional",
+                                                    "attributes": {
+                                                        "rollbackFor": "Exception.class"
+                                                    },
+                                                    "framework": "spring"
+                                                }
+                                            ],
+                                            "complexity_score": 8,
+                                            "line_count": 25
+                                        }
+                                    ],
+                                    "fields": [
+                                        {
+                                            "name": "userRepository",
+                                            "type": "UserRepository",
+                                            "visibility": "private",
+                                            "modifiers": [
+                                                "private",
+                                                "final"
+                                            ],
+                                            "annotations": [
+                                                "@Autowired"
+                                            ],
+                                            "initial_value": null
+                                        }
+                                    ],
+                                    "inner_classes": [],
+                                    "imports": [
+                                        "org.springframework.stereotype.Service",
+                                        "org.springframework.transaction.annotation.Transactional"
+                                    ],
+                                    "dependencies": [
+                                        "UserRepository",
+                                        "UserRequest",
+                                        "User"
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "path": "Deployment/Storm2/WebContent",
+            "subdomains": [
+                {
+                    "path": "jsp/gsl/user",
+                    "type": "web",
+                    "source_location": "Deployment/Storm2/WebContent",
+                    "framework_hints": [],
+                    "preliminary_component_type": "screen",
+                    "preliminary_component_name": "user",
+                    "tags": [],
+                    "package_layer": {
+                        "layer": "UI",
+                        "pattern_type": "ui_path",
+                        "confidence": 0.8,
+                        "matched_pattern": null
+                    },
+                    "architectural_pattern": {
+                        "pattern": "none",
+                        "pattern_type": "none",
+                        "confidence": 0.0,
+                        "detected_from_directory": false,
+                        "package_name": null,
+                        "matched_pattern": null
+                    },
+                    "file_inventory": [
+                        {
+                            "path": "jsp/gsl/user/setup/ChangeDefaultRC.jsp",
+                            "source_location": "Deployment/Storm2/WebContent",
+                            "size_bytes": 2048,
+                            "language": "java",
+                            "last_modified": "2025-07-27T15:00:00Z",
+                            "type": "java",
+                            "functional_name": "ChangeDefaultRC",
+                            "jsp_details": [
+                                {}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+  "directory_structure": {
+    "discovered_patterns": [],
+    "source_directories": [
+      "db/Interfaces",
+      "db/Session",
+      "db/Storm2/dbTableCreeateScripts",
+      "db/Storm2/dbViewCreateScripts",
+      "db/Storm2/functions",
+      "db/Storm2/indexes",
+      "db/Storm2/storedProcs",
+      "db/Storm2/triggers",
+      "db/TimeKeeper",
+      "Deployment/config",
+      "Deployment/Storm/src",
+      "Deployment/Storm/WebContent",
+      "Deployment/Storm-netrm/src",
+      "Deployment/Storm2/src",
+      "Deployment/Storm2/WebContent",
+      "Deployment/Storm2I213/src",
+      "Deployment/Storm2I70/src",
+      "Deployment/Storm2I90/src",
+      "Deployment/STORM2_Quartz/src",
+      "Deployment/Storm_Aux/src"
+    ],
+    "package_structure": {
+      "architectural_packages": [
+        "storm"
+      ],
+      "business_packages": [
+        "com.nbcuni.dcss.storm.asl.user",
+        "com.nbcuni.dcss.storm.asl.tour", 
+        "com.nbcuni.dcss.storm.asl.resource",
+        "com.nbcuni.dcss.storm.dsl.client",
+        "com.nbcuni.dcss.storm.dsl.contract",
+        "com.nbcuni.dcss.storm.gsl.notification",
+        "com.nbcuni.dcss.storm.isl.sap"
+        ]
+    }
+  },
+    "validation_results": {
+        "parsing_success_rate": 1.0,
+        "annotation_extraction_rate": 0.95,
+        "method_signature_completeness": 0.98,
+        "framework_pattern_detection_rate": 0.90,
+        "issues": []
+    }
+}

@@ -1,0 +1,19 @@
+CodeSight AST Parser Dependencies
+========================================
+
+Dependency: javaparser-core
+Version: 3.24.2
+Filename: javaparser-core-3.24.2.jar
+Description: JavaParser core library for Java AST parsing
+Required: Yes
+URL: https://repo1.maven.org/maven2/com/github/javaparser/javaparser-core/3.24.2/javaparser-core-3.24.2.jar
+----------------------------------------
+Dependency: javaparser-symbol-solver
+Version: 3.24.2
+Filename: javaparser-symbol-solver-core-3.24.2.jar
+Description: JavaParser symbol solver for enhanced AST analysis
+Required: No
+URL: https://repo1.maven.org/maven2/com/github/javaparser/javaparser-symbol-solver-core/3.24.2/javaparser-symbol-solver-core-3.24.2.jar
+----------------------------------------
+
+Downloaded on: 1753903826.1765695

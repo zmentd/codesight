@@ -440,7 +440,7 @@ class ConfigurationReader(BaseReader):
         for package in root.findall('.//package'):
             package_data: Dict[str, Any] = {
                 'name': package.get('name'),
-                'extends': package.get('extends'),
+                'extends': package.get('extends', None),
                 'namespace': package.get('namespace'),
                 'actions': [],
                 'interceptors': [],
@@ -515,7 +515,9 @@ class ConfigurationReader(BaseReader):
                 'type': action.get('type'),
                 'parameter': action.get('parameter'),
                 'scope': action.get('scope'),
-                'validate': action.get('validate')
+                'validate': action.get('validate'),
+                # New: capture form-bean name for validation linking
+                'name': action.get('name'),
             }
             elements["action_mappings"].append(action_data)
         

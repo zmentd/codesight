@@ -158,10 +158,9 @@ class Step04PatternAnalysis(BaseNode):
                     if not origin:
                         # last resort: try 'from' inside nested structures
                         try:
-                            # Some serializers may nest the relation payload under a key
                             if isinstance(r.get("payload"), dict):
                                 origin = r["payload"].get("from") or r["payload"].get("from_id")
-                        except Exception:
+                        except (AttributeError, KeyError, TypeError):
                             pass
                     if not origin:
                         continue
@@ -224,6 +223,36 @@ class Step04PatternAnalysis(BaseNode):
         try:
             gates = self.config.quality_gates.step04
             threshold = getattr(gates, 'min_pattern_confidence', 0.8) or getattr(self.step04_config, 'pattern_confidence_threshold', 0.8)
+
+            # Diagnostics: compute how many relations would be filtered and by type
+            def _rel_list(obj: Any) -> List[Relation] | List[dict]:
+                if isinstance(obj, Step04Output):
+                    return obj.relations or []
+                if isinstance(obj, dict):
+                    return obj.get("relations", []) or []
+                return []
+
+            rels_before = _rel_list(output_data)
+            filtered_count = 0
+            filtered_by_type: dict[str, int] = {}
+            try:
+                for rr in rels_before:
+                    if isinstance(rr, Relation):
+                        conf = float(getattr(rr, 'confidence', 0.0) or 0.0)
+                        rtype = str(getattr(rr, 'type', '') or '')
+                        if conf < float(threshold):
+                            filtered_count += 1
+                            filtered_by_type[rtype] = filtered_by_type.get(rtype, 0) + 1
+                    elif isinstance(rr, dict):
+                        conf = float(rr.get('confidence', 0.0) or 0.0)
+                        rtype = str(rr.get('type', '') or '')
+                        if conf < float(threshold):
+                            filtered_count += 1
+                            filtered_by_type[rtype] = filtered_by_type.get(rtype, 0) + 1
+            except (AttributeError, TypeError, ValueError):
+                # Best-effort only; ignore diagnostics failure
+                pass
+
             # Filter relations below min confidence (only warn here; assemblers should aim above threshold)
             if isinstance(output_data, Step04Output):
                 before = len(output_data.relations)
@@ -231,6 +260,10 @@ class Step04PatternAnalysis(BaseNode):
                 after = len(output_data.relations)
                 if after < before:
                     warnings.append(f"Filtered {before - after} relations below confidence threshold {threshold}")
+                # Ensure stats exists and record diagnostics
+                output_data.stats = dict(output_data.stats or {})
+                output_data.stats["filtered_relations_below_confidence"] = filtered_count
+                output_data.stats["filtered_relations_by_type"] = dict(sorted(filtered_by_type.items(), key=lambda kv: kv[1], reverse=True))
             elif isinstance(output_data, dict) and isinstance(output_data.get("relations"), list):
                 before = len(output_data["relations"])
                 output_data["relations"] = [
@@ -240,6 +273,10 @@ class Step04PatternAnalysis(BaseNode):
                 after = len(output_data["relations"])
                 if after < before:
                     warnings.append(f"Filtered {before - after} relations below confidence threshold {threshold}")
+                # Ensure stats exists and record diagnostics
+                stats = output_data.setdefault("stats", {})
+                stats["filtered_relations_below_confidence"] = filtered_count
+                stats["filtered_relations_by_type"] = dict(sorted(filtered_by_type.items(), key=lambda kv: kv[1], reverse=True))
 
             # Compute config parse success pct and compare to gate
             cfg_pct = self._calc_config_parse_success_pct(output_data)
@@ -248,7 +285,7 @@ class Step04PatternAnalysis(BaseNode):
                 errors.append(
                     f"Config parse success {cfg_pct:.2f} below minimum {min_pct:.2f}"
                 )
-        except Exception as e:  # pylint: disable=broad-except
+        except (AttributeError, TypeError, ValueError) as e:
             warnings.append(f"Gate evaluation error: {e}")
 
         return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)

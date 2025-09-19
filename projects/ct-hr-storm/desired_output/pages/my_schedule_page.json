@@ -1,0 +1,216 @@
+{
+  "pageId": "my_schedule",
+  "menuKey": "My Schedule",
+  "source": {
+    "primaryJsps": [
+      "jsp/asl/scheduling/assignment/ScheduleLauncher.jsp",
+      "jsp/asl/scheduling/ScheduleLauncher.jsp"
+    ],
+    "relatedHandlers": [
+      "com.nbcuni.dcss.storm.dsl.schedule.assignment.xhtml.AssignmentXHTMLHandler"
+    ],
+    "invocation": "Loaded in Details frame when user clicks any Assignments schedule link (Today, Today 2 days, Posted 7 days, Posted 9 days, date offsets, My assignments) generated client-side via AssignmentXHTMLHandler.getChildren()."
+  },
+  "description": "Provides each user with an immediate, consolidated view of their upcoming and recently posted work assignments. It supports quick time-span pivots (today, two-day view, 7‑day and 9‑day posted ranges) so a coordinator or crew member can validate coverage, confirm posting publication, and plan resource availability without navigating multiple pages. On a first visit it automatically loads the most recently posted schedule so the user sees authoritative published data instantly. Subsequent targeted links (e.g. specific day or posted range) give rapid context switching for day‑of execution, near‑term planning, and historical reference of the last published windows.",
+  "technicalDescription": "Bootstrap launcher JSP for user assignment schedules. It resolves desired format / posting id (either directly from query parameters or by executing GetLastPostedSchedule when FirstPage=true) then hands off rendering to parent.Menu.goSchedule. The JSP itself outputs no schedule markup; its sole purpose is to calculate arguments and call the parent frame JS API. Two JSP variants are present (assignment subfolder and sibling scheduling folder) with nearly identical logic differing only in relative error page path and onbeforeunload handler in the non-assignment variant.",
+  "formats": [
+    { "code": 1, "meaning": "Single day view" },
+    { "code": 2, "meaning": "2-day (current + next) composite view" },
+    { "code": 7, "meaning": "Posted 7 days view (from last posted schedule range)" },
+    { "code": 9, "meaning": "Posted 9 days view (from last posted schedule range)" }
+  ],
+  "forms": {
+    "hasFormElements": false,
+    "inputs": [
+      {
+        "name": "Format",
+        "type": "query param (int)",
+        "purpose": "Requested schedule view format; if 0 or omitted and FirstPage=true then replaced by value from GetLastPostedSchedule."
+      },
+      {
+        "name": "PostScheduleId",
+        "type": "query param (int)",
+        "purpose": "Explicit posted schedule Id to display; overridden when FirstPage=true if stored procedure returns a row."
+      },
+      {
+        "name": "FirstPage",
+        "type": "query param (boolean)",
+        "purpose": "Indicates initial landing; triggers stored procedure to auto-select last posted schedule."
+      }
+    ],
+    "derived": [
+      {
+        "name": "resourceId",
+        "source": "sc.getSession().getResourceIdForAssignments()",
+        "purpose": "Resource whose assignments are displayed; recalculated after stored procedure call when FirstPage=true."
+      },
+      {
+        "name": "resourceName",
+        "source": "ResourceMgr.resourceMgrObject().getNameFromDB(resourceId)",
+        "purpose": "Lookup of display name passed to parent.Menu.goSchedule."
+      }
+    ],
+    "readOnlySession": [
+      { "name": "sc.getSessionId()", "purpose": "Authentication check; JSP short-circuits if <=0." },
+      { "name": "sc.getSession().getUserCompanyId()", "purpose": "Company scope parameter for GetLastPostedSchedule." }
+    ]
+  },
+  "actions": [
+    {
+      "name": "Resolve last posted schedule (optional)",
+      "trigger": "FirstPage=true parameter during initial navigation",
+      "logic": "Executes GetLastPostedSchedule and assigns returned Format/Id into local variables, overriding query params."
+    },
+    {
+      "name": "Invoke schedule render in parent frame",
+      "trigger": "window.onload script (only if format>0)",
+      "logic": "Calls parent.Menu.goSchedule(resourceId,format,resourceName,postScheduleId,firstPage) when parent.Menu (or goSchedule) function is defined."
+    }
+  ],
+  "serviceCalls": [
+    {
+      "call": "EXEC GetLastPostedSchedule ?,?",
+      "parameters": ["resourceIdForAssignments","userCompanyId"],
+      "resultUsage": "Provides latest posted schedule metadata (Format & Id)."
+    },
+    {
+      "call": "ResourceMgr.getNameFromDB(resourceId)",
+      "type": "Java method",
+      "resultUsage": "Resolves human-friendly resource name passed to JS API."
+    }
+  ],
+  "javascriptIntegration": {
+    "parentFunction": "parent.Menu.goSchedule(resourceId, format, resourceName, postScheduleId, firstPage)",
+    "definitionLocation": "jsp/asl/general/Menu.jsp (inline <SCRIPT> block)",
+    "functionBodySummary": "Sets hidden form fields (PostScheduleId, ResourceId, ScheduleFormat) on form id=goSchedule; constructs daysText mapping 1→'1 day', 2→'2 days', 7→'7 days', 9→'9 days'; sets wait cursor on parent.Details; if firstPage or user confirms via Ask() then submits form (goSchedule.submit()), else restores cursor.",
+    "formSubmission": {
+      "formId": "goSchedule",
+      "action": "<ScheduleXHTMLHandler>.getMyDetailsPagePath() + 'Main.jsp'",
+      "method": "POST",
+      "target": "_top",
+      "hiddenInputs": ["ResourceId","ScheduleFormat","PostScheduleId"],
+      "legacyNameCollisionNote": "Function name and form id are identical; IE-era global resolution allows goSchedule.submit() to refer to the FORM element despite the enclosing function name."
+    }
+  },
+  "security": {
+    "sessionCheck": "`if (!(sc.getSessionId()>0)) return;` prevents unauthenticated execution.",
+    "permissions": [
+      "Visibility and generation of launcher links controlled externally by AssignmentXHTMLHandler using security.getAssignments(), getLastPostings(), getChangeAssignmentsResource().",
+      "Launcher JSP itself performs no granular permission branching beyond relying on prior menu gating."
+    ]
+  },
+  "dependencies": {
+    "classes": [
+      "com.nbcuni.dcss.storm.isl.session.StormContext",
+      "com.nbcuni.dcss.storm.isl.session.SessionHandler",
+      "com.nbcuni.dcss.storm.dsl.resources.ResourceMgr",
+      "com.nbcuni.dcss.storm.dsl.resources.IResourceMgr",
+      "com.nbcuni.dcss.storm.isl.database.StormPS",
+      "java.sql.ResultSet"
+    ],
+    "storedProcedures": ["GetLastPostedSchedule"],
+    "parentFrameApi": ["Menu.goSchedule"]
+  },
+  "differencesBetweenVariants": [
+    "Assignment variant path: jsp/asl/scheduling/assignment/ScheduleLauncher.jsp",
+    "Sibling variant: jsp/asl/scheduling/ScheduleLauncher.jsp (includes onbeforeunload stub and slight import ordering differences).",
+    "Functional behavior (parameter resolution and parent call) is equivalent."
+  ],
+  "openQuestions": [],
+  "resolvedQuestions": [
+    {
+      "id": "RQ-FORMAT-CODES",
+      "question": "Full semantics / completeness of format codes beyond {1,2,7,9}?",
+      "resolution": "Only 1,2,7,9 appear. Menu.jsp goSchedule daysText mapping enumerates exactly these; repository-wide searches found no additional ScheduleFormat comparisons (no hits for =3,4,5,6,8).",
+      "evidence": [
+        "Menu.jsp: goSchedule() conditional branches for 1,2,7,9",
+        "GetLastPostedSchedule result consumed without alternative codes"
+      ]
+    },
+    {
+      "id": "RQ-GOSCHEDULE-IMPLEMENTATION",
+      "question": "Exact implementation of parent.Menu.goSchedule?",
+      "resolution": "Inline JavaScript function in Menu.jsp defines goSchedule(...).",
+      "evidence": [
+        "Menu.jsp: function goSchedule(resourceId, format, resourceName, postScheduleId, firstPage) { ... goSchedule.submit(); }",
+        "Following FORM id=goSchedule with hidden inputs submitted to Main.jsp"
+      ]
+    },
+    {
+      "id": "RQ-JSP-VARIANTS-ACTIVE",
+      "question": "Are both ScheduleLauncher.jsp variants active?",
+      "resolution": "Both paths present and invoked by AssignmentXHTMLHandler link generation (assignment-specific vs general scheduling). No deprecation markers observed.",
+      "evidence": [
+        "Both JSP files exist and share logic differing only in minor framing concerns"
+      ]
+    }
+  ],
+  "completenessAudit": {
+    "reviewedArtifacts": [
+      "ScheduleLauncher.jsp (assignment variant)",
+      "ScheduleLauncher.jsp (scheduling variant)",
+      "Menu.jsp (inline goSchedule function & form)"
+    ],
+    "uncovered": [
+      "Upstream handler logic generating date nodes (already separately documented under Assignments)"
+    ],
+    "assumptions": [
+      "Format codes 1/2/7/9 stable and exhaustive for current UI paths.",
+      "No hidden form fields in launcher JSP itself (form resides in parent Menu frame)."
+    ]
+  },
+  "requirements": {
+    "traceability": "Derived from ScheduleLauncher.jsp variants, Menu.jsp goSchedule implementation, AssignmentXHTMLHandler link generation logic, stored procedure usage, and observed parameter handling.",
+    "validation": [
+      { "id": "VAL-SESSION-AUTH", "statement": "Page must terminate execution immediately if sessionId <= 0.", "source": "ScheduleLauncher.jsp session guard", "category": "security" },
+      { "id": "VAL-FORMAT-POSITIVE", "statement": "Format must be a positive integer (>0) to trigger schedule rendering; non-positive or missing values suppress parent call.", "source": "if (format > 0) guard", "category": "input" },
+      { "id": "VAL-FORMAT-ENUM", "statement": "Accepted format codes limited to {1,2,7,9} unless future expansion is explicitly implemented.", "source": "Enumerated usage in links + stored procedure result", "category": "input" },
+      { "id": "VAL-POSTSCHEDULEID-INT", "statement": "PostScheduleId parameter, when provided, must be numeric; non-numeric values ignored (implicit by int parsing).", "source": "Parameter parsing of PostScheduleId", "category": "input" },
+      { "id": "VAL-FIRSTPAGE-BOOL", "statement": "FirstPage parameter interpreted as boolean flag controlling stored procedure execution.", "source": "firstPage conditional before DB call", "category": "input" },
+      { "id": "VAL-RESOURCE-RESOLUTION", "statement": "resourceId must be resolved from session (getResourceIdForAssignments) for last posted retrieval and final rendering.", "source": "Stored procedure param population", "category": "data" },
+      { "id": "VAL-CONFIRM-MESSAGE-MAP", "statement": "Confirmation message daysText must map 1→'1 day', 2→'2 days', 7→'7 days', 9→'9 days'.", "source": "Menu.jsp goSchedule daysText construction", "category": "ux" }
+    ],
+    "businessLogic": [
+      { "id": "BL-AUTO-LAST-POSTED", "statement": "On first visit (FirstPage=true) system auto-selects most recently posted schedule (format & id) overriding user-provided values to guarantee authoritative default view.", "source": "GetLastPostedSchedule override logic" },
+      { "id": "BL-LINK-CONTEXT-RANGE", "statement": "User can pivot among predefined temporal ranges (1-day, 2-day, last 7 posted days, last 9 posted days) via assignment menu links without manual date input.", "source": "AssignmentXHTMLHandler generated links" },
+      { "id": "BL-NO-DATA-NO-RENDER", "statement": "If no posted schedule found (no row returned) and no valid format supplied (>0), no schedule frame render call is issued (prevents displaying stale/empty view).", "source": "format > 0 guard after DB call" },
+      { "id": "BL-RESOURCE-CONTEXT", "statement": "Schedules always scoped to the session's assignment resource ensuring personalized workload context.", "source": "resourceId reassignment after procedure" },
+      { "id": "BL-RESOURCE-NAME-RESOLVE", "statement": "Human-readable resourceName is resolved at launch to support labeled presentation in schedule UI.", "source": "ResourceMgr.getNameFromDB" },
+      { "id": "BL-IDEMPOTENT-NONFIRST", "statement": "Subsequent navigations (FirstPage!=true) must not invoke GetLastPostedSchedule to avoid redundant DB work and preserve explicitly chosen view.", "source": "Conditional around stored procedure" },
+      { "id": "BL-FRAME-DELEGATION", "statement": "Rendering responsibility delegated to parent frame (Menu.goSchedule); launcher remains logic-only to minimize duplication.", "source": "parent.Menu.goSchedule invocation" },
+      { "id": "BL-GOSCHEDULE-FORM-SUBMIT", "statement": "Schedule navigation executed via cross-frame form submission (Menu.jsp form id=goSchedule) after setting hidden fields.", "source": "Menu.jsp goSchedule implementation" }
+    ],
+    "security": [
+      { "id": "SEC-MENU-GATING", "statement": "Access to launcher links restricted by permissions: getAssignments, getLastPostings, getChangeAssignmentsResource (handled in AssignmentXHTMLHandler).", "source": "Handler permission checks" },
+      { "id": "SEC-NO-ELEVATION", "statement": "Launcher must not bypass or re-evaluate granular permissions; it trusts upstream gating and only enforces session presence.", "source": "Absence of additional permission branches" }
+    ],
+    "data": [
+      { "id": "DATA-SP-COLUMNS", "statement": "Stored procedure GetLastPostedSchedule returns columns Id and ScheduleFormat (aliased as Format) from POST_SCHEDULE.", "source": "Procedure body SELECT TOP 1 PS.[Id], PS.ScheduleFormat AS [Format]", "tables": ["POST_SCHEDULE"], "columns": ["POST_SCHEDULE.Id","POST_SCHEDULE.ScheduleFormat","POST_SCHEDULE.SavedDate","POST_SCHEDULE.CompanyId"], "operation": "read" },
+      { "id": "DATA-SP-JOIN", "statement": "Join to RESOURCES_IN_POST_SCHEDULES on PS.Id = RPS.PostScheduleId filtered by RPS.ResourceId = @@ResourceId.", "source": "Procedure body LEFT OUTER JOIN RESOURCES_IN_POST_SCHEDULES RPS ON PS.[Id] = RPS.PostScheduleId WHERE RPS.ResourceId = @@ResourceId", "tables": ["RESOURCES_IN_POST_SCHEDULES"], "columns": ["RESOURCES_IN_POST_SCHEDULES.PostScheduleId","RESOURCES_IN_POST_SCHEDULES.ResourceId"], "operation": "read" },
+      { "id": "DATA-SP-FILTER-COMPANY", "statement": "Company filter allows match on PS.CompanyId = @@CompanyId or PS.CompanyId IS NULL.", "source": "Procedure WHERE clause (PS.CompanyId = @@CompanyId OR PS.CompanyId IS NULL)", "tables": ["POST_SCHEDULE"], "columns": ["POST_SCHEDULE.CompanyId"], "operation": "read" },
+      { "id": "DATA-SP-ORDER", "statement": "Most recent posting determined by ORDER BY PS.SavedDate DESC with TOP 1 limiting result.", "source": "Procedure ORDER BY PS.SavedDate DESC", "tables": ["POST_SCHEDULE"], "columns": ["POST_SCHEDULE.SavedDate"], "operation": "read" },
+      { "id": "DATA-SP-NOLOCK", "statement": "READ operations use WITH(NOLOCK) hints on POST_SCHEDULE and RESOURCES_IN_POST_SCHEDULES.", "source": "Procedure FROM clause WITH(NOLOCK) usage", "tables": ["POST_SCHEDULE","RESOURCES_IN_POST_SCHEDULES"], "columns": [], "operation": "read" },
+      { "id": "DATA-SP-PARAMS", "statement": "Procedure parameters: @@ResourceId, @@CompanyId (names as declared).", "source": "Procedure signature", "tables": [], "columns": ["@@ResourceId","@@CompanyId"], "operation": "read" },
+      { "id": "DATA-RESOURCE-INVARIANT", "statement": "resourceId after override must equal session.getResourceIdForAssignments; no cross-user substitution permitted (value reassigned only from session).", "source": "Assignment after rs.next() in JSP", "tables": [], "columns": ["resourceId (in-memory variable)"], "operation": "read" },
+      { "id": "DATA-RESOURCE-NAME-LOOKUP", "statement": "ResourceMgr.getNameFromDB(resourceId) retrieves resource display name (underlying table/columns not shown in inspected code).", "source": "ResourceMgr.getNameFromDB invocation", "tables": [], "columns": [], "operation": "read" },
+      { "id": "DATA-LAUNCHER-NO-DML", "statement": "Launcher JSP issues no INSERT/UPDATE/DELETE; only executes GetLastPostedSchedule and name lookup.", "source": "Absence of DML in ScheduleLauncher.jsp", "tables": [], "columns": [], "operation": "none" }
+    ],
+    "ux": [
+      { "id": "UX-INSTANT-VIEW", "statement": "User should see a valid schedule on first entry without choosing parameters (auto-selection logic).", "source": "Auto last posted behavior" },
+      { "id": "UX-FAST-PIVOT", "statement": "Switching between temporal views occurs via single click menu links without page reload logic duplication (handled by distinct launcher invocations).", "source": "Handler-generated links" },
+      { "id": "UX-CONDITIONAL-CONFIRM", "statement": "Confirmation dialog suppressed on firstPage loads and shown on subsequent manual pivots.", "source": "Menu.jsp goSchedule firstPage || Ask(...) condition" }
+    ],
+    "performance": [
+      { "id": "PERF-SINGLE-SP-CALL", "statement": "At most one stored procedure call executed per initial landing (FirstPage=true).", "source": "Single conditional call" },
+      { "id": "PERF-NO-SP-NONFIRST", "statement": "No database round-trip for subsequent navigations unless user explicitly requests another firstPage context (should not happen via standard links).", "source": "Conditional gating" }
+    ],
+    "nonFunctional": [
+      { "id": "NF-SEPARATION-OF-CONCERNS", "statement": "Launcher JSP contains no presentation markup beyond script to support maintainability and reuse of parent rendering logic.", "source": "Observed JSP structure" },
+      { "id": "NF-DEFENSIVE-CALL", "statement": "Invocation must check existence of parent.Menu and goSchedule to avoid runtime errors in frameset misconfiguration.", "source": "JavaScript safeguard condition" }
+    ],
+    "gaps": [
+      { "id": "GAP-NO-FALLBACK-MESSAGE", "statement": "No user-facing fallback specified when no posted schedule exists (format remains 0).", "impact": "Potential silent blank experience" },
+      { "id": "GAP-FORMAT-EXTENSIBILITY", "statement": "Process for introducing new format codes not defined (governance/validation missing).", "impact": "Risk of unsupported views" }
+    ]
+  }
+}

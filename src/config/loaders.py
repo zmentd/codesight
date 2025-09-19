@@ -254,6 +254,10 @@ class ConfigLoader:
                 if project_config.languages_patterns_overrides:
                     ConfigLoader._update_section_object(config_obj.languages_patterns, project_config.languages_patterns_overrides)
 
+                # Apply quality_gates overrides
+                if hasattr(project_config, 'quality_gates_overrides') and project_config.quality_gates_overrides:
+                    ConfigLoader._update_section_object(config_obj.quality_gates, project_config.quality_gates_overrides)
+
                 # Apply jsp_analysis overrides (always if present in project config)
                 if hasattr(project_config, 'jsp_analysis_overrides'):
                     if project_config.jsp_analysis_overrides:
@@ -322,6 +326,7 @@ class ConfigLoader:
                 architectural_patterns_overrides=config_data.get('architectural_patterns', {}),
                 frameworks_overrides=config_data.get('frameworks', {}),
                 languages_patterns_overrides=config_data.get('languages_patterns', {}),
+                quality_gates_overrides=config_data.get('quality_gates', {}),
                 jsp_analysis_overrides=config_data.get('jsp_analysis', {}),
             )
             

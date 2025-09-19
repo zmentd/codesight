@@ -298,6 +298,8 @@ class Step05Config(BaseStepConfig):
     enable_business_logic_extraction: bool = True
     enable_domain_classification: bool = True
     retry_attempts: int = 2
+    # New: optional grouping of capabilities by dominant Step03 semantic cluster
+    enable_cluster_grouping: bool = False
 
 
 @dataclass

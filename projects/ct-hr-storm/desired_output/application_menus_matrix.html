@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Application Menu Navigation Matrix</title>
+<style>
+ body { font-family: Arial, sans-serif; line-height: 1.35; margin: 1.2rem; }
+ h1, h2, h3 { margin-top: 2.0rem; }
+ h1 { border-bottom: 3px solid #444; padding-bottom: .3rem; }
+ nav.bundle-index { background:#f5f5f5; padding: .75rem 1rem; border:1px solid #ccc; border-radius:6px; display:flex; flex-wrap:wrap; gap:.55rem; }
+ nav.bundle-index a { font-weight:600; text-decoration:none; color:#004085; }
+ nav.bundle-index a:hover { text-decoration:underline; }
+ /* Updated grid: slightly narrower label column, flexible value, better wrapping */
+ .key-grid { display:grid; grid-template-columns: 120px minmax(0,1fr); gap:.30rem .75rem; margin:.65rem 0 1.15rem; padding:.85rem 1.05rem .9rem; border:1px solid #d6d6d6; border-radius:7px; background:#fcfcfc; }
+ .key-grid h3 { margin:0 0 .35rem 0; font-size:1.07rem; grid-column:1 / -1; }
+ .key-grid h3 a { color:#0b4f91; text-decoration:none; }
+ .key-grid h3 a:hover { text-decoration:underline; }
+ .key-grid .label { font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.5px; color:#333; align-self:start; }
+ .key-grid .value { min-width:0; overflow-wrap:anywhere; word-break:break-word; line-height:1.25; }
+ .key-grid .value em { color:#555; }
+ .key-grid .value ul { margin:.25rem 0 .4rem 1.1rem; padding:0; }
+ .key-grid .value li { margin:.15rem 0; }
+ .evidence-text { font-family:Consolas,Monaco,monospace; font-size:.75rem; background:#f4f4f4; padding:6px 8px; border:1px solid #e2e2e2; border-radius:4px; display:block; white-space:normal; line-height:1.3; }
+ .badge { display:inline-block; font-size:.6rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; background:#555; color:#fff; padding:2px 6px; border-radius:4px; margin-left:.5rem; }
+ .anomaly { color:#b30000; font-weight:600; }
+ code { background:#eee; padding:2px 4px; border-radius:4px; }
+ .missing { color:#b54700; font-style:italic; }
+ footer { margin-top:3rem; font-size:.75rem; color:#666; }
+ .loading { font-style:italic; color:#666; }
+ .error { color:#b30000; font-weight:600; }
+ details.group-block { border:1px solid #bbb; border-radius:6px; margin:1.4rem 0; background:#f9f9f9; }
+ details.group-block > summary { cursor:pointer; padding:.6rem 1rem; font-weight:700; font-size:1.05rem; list-style:none; }
+ details.group-block[open] { background:#fefefe; }
+ .group-content { padding: .25rem 1rem 1rem; }
+ .anchor { scroll-margin-top: 90px; }
+ /* Optional compact toggle */
+ .compact .key-grid { padding:.55rem .8rem; }
+</style>
+</head>
+<body>
+<h1>Application Menu Navigation Matrix (Dynamic View)</h1>
+<p>This page dynamically loads <code>application_menus_data.json</code> (canonical evidence extract). Fields shown are exactly those present in JSON (no inferred additions). Use the toggle for compact spacing if desired.</p>
+<button id="toggle-compact" style="margin:.4rem 0 1rem;">Toggle Compact Mode</button>
+<nav class="bundle-index" id="bundle-index"><span class="loading">Loading index…</span></nav>
+<section id="static" class="anchor">
+  <h2>Static Entries (Menu.jsp)</h2>
+  <div id="static-entries"><span class="loading">Loading…</span></div>
+</section>
+<section id="dynamic-groups" class="anchor">
+  <h2>Dynamic Handler-Backed Groups</h2>
+  <div id="groups-container"><span class="loading">Loading…</span></div>
+</section>
+<section id="anomalies" class="anchor">
+  <h2>Anomalies (from JSON)</h2>
+  <ul id="anomalies-list"><span class="loading">Scanning…</span></ul>
+</section>
+<section id="metadata" class="anchor">
+  <h2>Metadata & Methodology</h2>
+  <pre id="methodology" style="white-space:pre-wrap; background:#f5f5f5; padding:1rem; border:1px solid #ddd; border-radius:6px;"></pre>
+  <h3>Gaps / Next Validation Steps</h3>
+  <ul id="gaps-list"></ul>
+  <h3>Summary</h3>
+  <p id="summary-text"></p>
+</section>
+<footer>
+  Dynamic renderer. Edit <code>application_menus_data.json</code> to update. Evidence lines now wrap for readability.
+</footer>
+<script>
+(function(){
+  const jsonPath = 'application_menus_data.json';
+  const idxEl = document.getElementById('bundle-index');
+  const staticEl = document.getElementById('static-entries');
+  const groupsEl = document.getElementById('groups-container');
+  const anomaliesEl = document.getElementById('anomalies-list');
+  const methodologyEl = document.getElementById('methodology');
+  const gapsEl = document.getElementById('gaps-list');
+  const summaryEl = document.getElementById('summary-text');
+  const toggleBtn = document.getElementById('toggle-compact');
+
+  toggleBtn.addEventListener('click', ()=> document.body.classList.toggle('compact'));
+
+  function slugify(str){ return str.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+
+  function addRow(container, label, content){
+    const l = document.createElement('div'); l.className='label'; l.textContent=label; container.appendChild(l);
+    const v = document.createElement('div'); v.className='value';
+    if(content instanceof Node) v.appendChild(content); else v.textContent = content;
+    container.appendChild(v);
+  }
+
+  function evidenceNode(text){
+    const pre = document.createElement('span');
+    pre.className='evidence-text';
+    pre.textContent = text || '';
+    return pre;
+  }
+
+  function submenusNode(list){
+    if(!Array.isArray(list) || !list.length){ const em=document.createElement('em'); em.textContent='None / Not documented'; return em; }
+    // Detect if already structured (array of objects with name/function)
+    if(typeof list[0] === 'object' && list[0] && ('name' in list[0] || 'function' in list[0])){
+      return buildSubmenuTable(list.map(o=>({name:o.name||'', func:o.function||o.func||''})));
+    }
+    // Otherwise parse string lines: split on first '->'
+    const parsed = list.map(line=>{
+      const parts = line.split(/\s*->\s*/); // keep everything after first '->'
+      if(parts.length>1){
+        return {name: parts.shift().trim(), func: parts.join(' -> ').trim()};
+      }
+      return {name: line.trim(), func: ''};
+    });
+    return buildSubmenuTable(parsed);
+  }
+
+  function buildSubmenuTable(rows){
+    const table = document.createElement('table');
+    table.style.width='100%';
+    table.style.borderCollapse='collapse';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th style="text-align:left;border-bottom:1px solid #ccc;padding:2px 4px;font-size:.70rem;letter-spacing:.5px;text-transform:uppercase;">Name</th><th style="text-align:left;border-bottom:1px solid #ccc;padding:2px 4px;font-size:.70rem;letter-spacing:.5px;text-transform:uppercase;">Function / Target</th></tr>';
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    rows.forEach(r=>{
+      const tr=document.createElement('tr');
+      const td1=document.createElement('td'); td1.style.padding='2px 4px'; td1.style.verticalAlign='top'; td1.textContent=r.name; tr.appendChild(td1);
+      const td2=document.createElement('td'); td2.style.padding='2px 4px'; td2.style.verticalAlign='top'; td2.textContent=r.func; tr.appendChild(td2);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    return table;
+  }
+
+  function createKeyGrid(item){
+    const wrap = document.createElement('div'); wrap.className='key-grid';
+    const title = document.createElement('h3');
+    if(item.pageObject){
+      const a=document.createElement('a');
+      a.href=item.pageObject;
+      a.textContent=item.key;
+      a.target='_blank';
+      a.rel='noopener noreferrer';
+      title.appendChild(a);
+    } else {
+      title.textContent = item.key;
+    }
+    wrap.appendChild(title);
+    addRow(wrap,'Evidence', evidenceNode(item.evidence));
+    addRow(wrap,'Handler', item.handler || '');
+    addRow(wrap,'Description', item.description || '');
+    addRow(wrap,'Secured By', item.securedBy || '');
+    addRow(wrap,'Submenus', submenusNode(item.submenus));
+    if(item.anomalyNote) addRow(wrap,'Anomaly', item.anomalyNote);
+    if(item.note) addRow(wrap,'Note', item.note);
+    return wrap;
+  }
+
+  function buildStaticEntries(staticEntries){ staticEl.innerHTML=''; staticEntries.forEach(se=> staticEl.appendChild(createKeyGrid(se))); }
+  function buildGroups(groups){
+    groupsEl.innerHTML='';
+    const frag = document.createDocumentFragment();
+    groups.forEach(g=>{
+      const id = slugify(g.group);
+      const details = document.createElement('details'); details.className='group-block'; details.id=id; if(frag.childElementCount<2) details.open=true;
+      const summary = document.createElement('summary'); summary.textContent=g.group; details.appendChild(summary);
+      const gc = document.createElement('div'); gc.className='group-content';
+      (g.items||[]).forEach(item=> gc.appendChild(createKeyGrid(item)));
+      if(g.permissionDependencyChain){ const p=document.createElement('p'); p.style.fontStyle='italic'; p.textContent='Permission Dependency Chain: '+g.permissionDependencyChain; gc.appendChild(p); }
+      if(g.permissionHierarchySummary){ const p=document.createElement('p'); p.style.fontStyle='italic'; p.textContent='Permission Hierarchy: '+g.permissionHierarchySummary; gc.appendChild(p); }
+      details.appendChild(gc); frag.appendChild(details);
+    });
+    groupsEl.appendChild(frag);
+  }
+  function buildIndex(staticEntries, groups){
+    idxEl.innerHTML=''; const label=document.createElement('strong'); label.textContent='Jump:'; idxEl.appendChild(label);
+    const add=(href,text)=>{ const a=document.createElement('a'); a.href=href; a.textContent=text; idxEl.appendChild(a); };
+    add('#static','Static'); groups.forEach(g=> add('#'+slugify(g.group), g.group)); add('#anomalies','Anomalies'); add('#metadata','Metadata');
+  }
+  function buildAnomalies(groups){ anomaliesEl.innerHTML=''; const all=groups.flatMap(g=> g.items||[]); const an=all.filter(i=> i.anomalyNote); if(!an.length){ const li=document.createElement('li'); li.textContent='No anomaly notes present in JSON.'; anomaliesEl.appendChild(li); return;} an.forEach(a=>{ const li=document.createElement('li'); li.innerHTML='<strong>'+a.key+':</strong> '+a.anomalyNote; anomaliesEl.appendChild(li); }); }
+  function buildGaps(gaps){ gapsEl.innerHTML=''; gaps.forEach(g=>{ const li=document.createElement('li'); li.textContent=g; gapsEl.appendChild(li); }); }
+
+  fetch(jsonPath, {cache:'no-store'})
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(data=>{
+      methodologyEl.textContent = data.methodology || '';
+      summaryEl.textContent = data.summary || '';
+      buildStaticEntries(data.staticEntries || []);
+      buildGroups(data.dynamicGroups || []);
+      buildIndex(data.staticEntries || [], data.dynamicGroups || []);
+      buildAnomalies(data.dynamicGroups || []);
+      buildGaps(data.gapsNextValidationSteps || []);
+    })
+    .catch(err=>{
+      [idxEl, staticEl, groupsEl, anomaliesEl, methodologyEl].forEach(el=>{ if(el) el.innerHTML = '<span class="error">Failed to load JSON: '+ err.message +'</span>'; });
+    });
+})();
+</script>
+</body>
+</html>

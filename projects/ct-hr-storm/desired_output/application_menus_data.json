@@ -1,0 +1,642 @@
+{
+  "methodology": "1. Searched for `xhtmlHandlers.put(` across the project to enumerate dynamic object names exposed via the menu expansion mechanism.\n2. Inspected `SystemGeneral.java` (extends `com.nbcuni.dcss.storm.isl.general.GeneralSetup`).\n3. Inspected `SystemSetup.java` (extends `com.nbcuni.dcss.storm.isl.setup.SystemSetup`).\n4. Collected every key registered: the left-hand string literal in each `this.xhtmlHandlers.put(\"<Key>\", <Handler>.xhtmlHandlerObject())` call.\n5. Cross-referenced JSP `Menu.jsp` and `GetChildren.jsp` to confirm these keys are requested via `GetChildren.jsp?ObjName=<Key>` pattern when the user expands nodes.\n6. Did NOT include higher-level conceptual groupings (e.g. “System”, “Reports”, “Accounting”) because those container labels are not directly assembled in inspected files; only concrete expandable object keys registered in handlers are listed below. (High-level labels shown in earlier draft remain but are explicitly separated from concrete handler-backed keys.)",
+  "staticEntries": [
+    {
+      "key": "My Schedule",
+      "evidence": "Deployment/Storm2/WebContent/ResourceUser/Menu.jsp (static <li> element invoking dynamic expansion of `Assignments`).",
+      "description": "User-facing schedule root. Expands into dynamic scheduling views via `Assignments` key.",
+      "securedBy": "None (static render; dynamic children governed by Assignments handler security)",
+      "pageObject": "../pages/my_schedule.html"
+    },
+    {
+      "key": "My Personal Info",
+      "evidence": "Menu.jsp (static <li>/<a> direct link; no `GetChildren.jsp` call).",
+      "description": "Direct navigation to personal information page; no dynamic children.",
+      "securedBy": "None (no dynamic expansion security inspected here)"
+    },
+    {
+      "key": "My Skills",
+      "evidence": "Menu.jsp (static <li>/<a> direct link; no `GetChildren.jsp` call).",
+      "description": "Direct navigation to skills information; no dynamic children.",
+      "securedBy": "None (no dynamic expansion security inspected here)"
+    }
+  ],
+  "dynamicGroups": [
+    {
+      "group": "A. Operational Requests & Scheduling",
+      "items": [
+        {
+          "key": "Jobs",
+          "evidence": "SystemGeneral.java – `this.xhtmlHandlers.put(\"Jobs\", JobXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.dsl.request.xhtml.JobXHTMLHandler",
+          "description": "Handles job-related request entities (inferred from name).",
+          "securedBy": "Combination of specific request-related permissions. Submenu visibility gates use: findRequestRequestor, newRequest, copyRequest, fieldCrewRequest, findFieldCrewResources, editRequestForm, dubRequest (feature flag dependent), detailedRequest.",
+          "submenus": [
+            "General Request -> loads key 'Request'; requires ANY of (findRequestRequestor OR newRequest OR copyRequest) (expression: secure(sum of the three, baseline 0)).",
+            "Field Crew Request -> loads key 'FieldCrewRequest'; requires (fieldCrewRequest OR findFieldCrewResources).",
+            "Edit Request -> loads key 'EditRequest'; requires editRequestForm.",
+            "Dub Request -> loads key 'Dubs'; requires dubRequest AND session.showNewFeatures.",
+            "Detailed requests (report link) -> JobsReportParams.jsp; requires detailedRequest."
+          ]
+        },
+        {
+          "key": "Request",
+          "evidence": "SystemGeneral.java – `this.xhtmlHandlers.put(\"Request\", JobXHTMLHandler.xhtmlHandlerObject());`",
+            "handler": "com.nbcuni.dcss.storm.dsl.request.xhtml.JobXHTMLHandler",
+            "description": "Alias to job handler (inferred from duplicate handler usage).",
+            "securedBy": "Request-level operations gated by: findRequestRequestor, newRequest, copyRequest, resources (for listing existing requests). New/Copy items hidden when both triggering perms at NONE.",
+            "submenus": [
+              "Find request -> FindJob.jsp; requires findRequestRequestor.",
+              "New request -> New request form (getNewObj); shown if (newRequest OR findRequestRequestor) > NONE.",
+              "Copy request -> CopyRequest.jsp flow; shown if (copyRequest OR findRequestRequestor) > NONE (variant path if preSAP flag true).",
+              "Existing Requests list -> listOfItems(security.getResources(), Job.TYPE_REGULAR) (each row gated by resources permission value)."
+            ]
+        },
+        {
+          "key": "FieldCrewRequest",
+          "evidence": "SystemGeneral.java – `...put(\"FieldCrewRequest\", JobFieldCrewXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.dsl.request.field.xhtml.JobFieldCrewXHTMLHandler",
+          "description": "Field crew–specific job/request operations (inferred).",
+          "securedBy": "fieldCrewRequest, findFieldCrewResources, fcrAssignedCrews, resources.",
+          "submenus": [
+            "Find crews -> FindFieldCrewResources.jsp; requires findFieldCrewResources.",
+            "Find field crew request -> FindFieldCrew.jsp; requires fieldCrewRequest.",
+            "New field crew request -> Details.jsp?action=New; requires fieldCrewRequest.",
+            "Assigned Crews (report) -> report/AssignedCrews.jsp; requires fcrAssignedCrews.",
+            "Existing Field Crew Requests list -> listOfItems(security.getResources(), Job.TYPE_FIELDCREW)."
+          ]
+        },
+        {
+          "key": "Tours",
+          "evidence": "SystemGeneral.java – `...put(\"Tours\", TourXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.dsl.tour.xhtml.TourXHTMLHandler",
+          "description": "Tour request / management entities (inferred).",
+          "securedBy": "Unknown",
+          "submenus": []
+        },
+        {
+          "key": "EditRequest",
+          "evidence": "SystemGeneral.java – `...put(\"EditRequest\", EditRequestXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.dsl.request.edit.xhtml.EditRequestXHTMLHandler",
+          "description": "Edit service requests (inferred).",
+          "securedBy": "editRequestForm (for all actions) plus resources (for listing existing edit requests).",
+          "submenus": [
+            "Find edit request -> FindEditRequest.jsp; requires editRequestForm.",
+            "New edit request -> EditRequestDetails.jsp?action=New; requires editRequestForm.",
+            "Existing Edit Requests list -> listOfItems(security.getResources(), Job.TYPE_EDIT)."
+          ]
+        },
+        {
+          "key": "Dubs",
+          "evidence": "SystemGeneral.java – `...put(\"Dubs\", DubRequestXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.dsl.request.dub.xhtml.DubRequestXHTMLHandler",
+          "description": "Dubbing-related requests (inferred).",
+          "securedBy": "dubRequest (and session.showNewFeatures flag) controlling both creation and listing.",
+          "submenus": [
+            "New Dub Request -> DubDetails.jsp?action=NEW; requires dubRequest AND session.showNewFeatures.",
+            "Existing Dub Requests list -> listOfItems(security.getDubRequest(), lastUsedDubsCompany) shown only if dubRequest > NONE AND session.showNewFeatures."
+          ]
+        },
+        {
+          "key": "Assignments",
+          "evidence": "SystemGeneral.java – `...put(\"Assignments\", AssignmentXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.dsl.schedule.assignment.xhtml.AssignmentXHTMLHandler",
+          "description": "Scheduling / assignment entities (inferred).",
+          "securedBy": "assignments (My assignments), lastPostings (Previous Postings), changeAssignmentsResource (Change resource).",
+          "submenus": [
+            "My assignments -> key 'AssignmentsFor' (calls getChildren with modified key); requires assignments.",
+            "Today (Format=1) -> ScheduleLauncher.jsp?Format=1 for current day; no explicit security check.",
+            "Today 2 days (Format=2) -> ScheduleLauncher.jsp?Format=2; no explicit security check.",
+            "Next 6 daily entries (Format=1) -> one per subsequent day (loop generated); no explicit security check.",
+            "Posted 7 days -> ScheduleLauncher.jsp?Format=7; visibility depends on presence of SavedDate4Schedule7 data (node status) but no explicit permission method.",
+            "Posted 9 days -> ScheduleLauncher.jsp?Format=9; same as above.",
+            "Previous Postings -> triggers getChildren('Last3Postings'); requires lastPostings == VIEW.",
+            "Change resource -> labor_mgmt/resource/Find.jsp path; requires changeAssignmentsResource."
+          ]
+        }
+      ]
+    },
+    {
+      "group": "B. Organizational Structure & Services",
+      "items": [
+        {
+          "key": "Companies",
+          "evidence": "SystemSetup.java – `...put(\"Companies\", CompanyXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.company.xhtml.CompanyXHTMLHandler",
+          "description": "Company master data (inferred).",
+          "securedBy": "companies (controls listing of companies).",
+          "submenus": ["Company list items (each <LI> generated by listOfItems with key prefix 'Company'). No further nested nodes emitted by this handler."]
+        },
+        {
+          "key": "Branches",
+          "evidence": "SystemSetup.java – `...put(\"Branches\", BranchXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.company.branch.xhtml.BranchXHTMLHandler",
+          "description": "Branch organizational units (inferred).",
+          "securedBy": "branches (controls listing).",
+          "submenus": [
+            "List of Branch entities (Id==0).",
+            "Divisions node appears per branch if divisions > NONE.",
+            "If divisions == NONE the branch list items are terminal (LastItem true)."
+          ]
+        },
+        {
+          "key": "Divisions",
+          "evidence": "SystemSetup.java – `...put(\"Divisions\", DivisionXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.company.division.xhtml.DivisionXHTMLHandler",
+          "description": "Company divisions (inferred).",
+          "securedBy": "divisions (controls listing).",
+          "submenus": [
+            "List of Division entities (Id==0).",
+            "Departments node per division if departments > NONE.",
+            "If departments == NONE divisions are terminal."
+          ]
+        },
+        {
+          "key": "Departments",
+          "evidence": "SystemSetup.java – `...put(\"Departments\", DepartmentXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.company.dept.xhtml.DepartmentXHTMLHandler",
+          "description": "Department master data (inferred).",
+          "securedBy": "departments (controls listing).",
+          "submenus": ["Department entities only; no further child generation."]
+        },
+        {
+          "key": "Groups",
+          "evidence": "SystemSetup.java – `...put(\"Groups\", GroupXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.group.xhtml.GroupXHTMLHandler",
+          "description": "Generic grouping (semantics not shown).",
+          "securedBy": "Unknown",
+          "submenus": []
+        },
+        {
+          "key": "Services",
+          "evidence": "SystemSetup.java – `...put(\"Services\", ServiceXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.group.service.xhtml.ServiceXHTMLHandler",
+          "description": "Service definitions (inferred).",
+          "securedBy": "Unknown",
+          "submenus": []
+        },
+        {
+          "key": "Packages",
+          "evidence": "SystemSetup.java – `...put(\"Packages\", PackageXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.group.packages.xhtml.PackageXHTMLHandler",
+          "description": "Service/resource package definitions (inferred).",
+          "securedBy": "Unknown",
+          "submenus": []
+        }
+      ]
+    },
+    {
+      "group": "C. Human Resources, Users & Skills",
+      "items": [
+        {
+          "key": "Users",
+          "evidence": "SystemSetup.java – `...put(\"Users\", UserXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.user.xhtml.UserXHTMLHandler",
+          "description": "User account management.",
+          "securedBy": "users (Security.getUsers()).",
+          "submenus": [
+            "Find user (Find link) -> requires users (any level; always shown when parentId==0).",
+            "Add User -> shown only when users == EDIT.",
+            "Recently loaded users list -> listOfItems(users permission, lastLoadedUsers(userId, companyId)).",
+            "Users (child under a specific User Group) -> parentId group id; list items gated at Security.EDIT constant."
+          ]
+        },
+        {
+          "key": "UserGroups",
+          "evidence": "SystemSetup.java – `...put(\"UserGroups\", UserGroupXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.usergroup.xhtml.UserGroupXHTMLHandler",
+          "description": "User grouping / roles (inferred).",
+          "securedBy": "securityGroups (controls listing of user/security groups).",
+          "submenus": [
+            "Security Group list -> listOfItems(securityGroups, parentId=0).",
+            "Users child link per group -> requires users > NONE; leads to Users handler with parentId=groupId."
+          ]
+        },
+        {
+          "key": "ManagerPools",
+          "evidence": "SystemSetup.java – `...put(\"ManagerPools\", ResourceManagersPoolXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.resourcemanagers.xhtml.ResourceManagersPoolXHTMLHandler",
+          "description": "Pools of resource managers (inferred).",
+          "securedBy": "Unknown",
+          "submenus": []
+        },
+        {
+          "key": "Trainings",
+          "evidence": "SystemSetup.java – `...put(\"Trainings\", TrainingXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.training.xhtml.TrainingXHTMLHandler",
+          "description": "Training catalog (inferred).",
+          "securedBy": "training (controls listing).",
+          "submenus": ["Training entities list (Id==0) only; no deeper nodes."]
+        },
+        {
+          "key": "EmployeeTypes",
+          "evidence": "SystemSetup.java – `...put(\"EmployeeTypes\", EmployeeTypeXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.employeetype.xhtml.EmployeeTypeXHTMLHandler",
+          "description": "Employee classification (inferred).",
+          "securedBy": "implicit EDIT level inside handler (uses Security.EDIT constant directly for list items).",
+          "submenus": ["Employee type entities list (Id==0), no deeper nodes.", "Note: Unlike others, does not call a specific security.getEmployeeTypes(); uses global edit capability for maintenance."]
+        },
+        {
+          "key": "TkUnions",
+          "evidence": "SystemSetup.java – `...put(\"TkUnions\", TkUnionXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.tkunion.xhtml.TkUnionXHTMLHandler",
+          "description": "Union tracking (inferred).",
+          "securedBy": "Unknown",
+          "submenus": []
+        }
+      ]
+    },
+    {
+      "group": "D. Resource & Collection Management",
+      "items": [
+        {
+          "key": "Resources",
+          "evidence": "SystemSetup.java – `...put(\"Resources\", ResourceXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.dsl.resources.xhtml.ResourceXHTMLHandler",
+          "description": "Core resource entities (inferred).",
+          "securedBy": "resources (controls listing). Additional report access gated by resourcesReports (adds Reports node when > NONE).",
+          "submenus": [
+            "Find Resource (Find link).",
+            "Recent Resources list -> listOfItems(resources, lastUsedCompany(...)).",
+            "Reports (virtual child) -> appears only if resourcesReports > NONE; loads key 'Reports'."
+          ]
+        },
+        {
+          "key": "ResourceCollections",
+          "evidence": "SystemSetup.java – `...put(\"ResourceCollections\", ResourcesCollectionXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.collections.resource.xhtml.ResourcesCollectionXHTMLHandler",
+          "description": "Groupings of resources (inferred).",
+          "securedBy": "Unknown",
+          "submenus": []
+        },
+        {
+          "key": "ServiceCollections",
+          "evidence": "SystemSetup.java – `...put(\"ServiceCollections\", ServicesCollectionXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.collections.services.xhtml.ServicesCollectionXHTMLHandler",
+          "description": "Groupings of services (inferred).",
+          "securedBy": "Unknown",
+          "submenus": []
+        },
+        {
+          "key": "Location",
+          "evidence": "SystemSetup.java – `...put(\"Location\", ResourceMaterialXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.dsl.resources.material.xhtml.ResourceMaterialXHTMLHandler",
+          "description": "Location-related resource materials (inferred).",
+          "securedBy": "none (listOfItems called with Security.NONE constant).",
+          "submenus": ["Material resource items (ResourceMaterialXHTMLHandler) generated from byLocation(parentId); no deeper authorized nodes."]
+        },
+        {
+          "key": "Categories",
+          "evidence": "SystemSetup.java – `...put(\"Categories\", LocationXHMTLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.location.xhtml.LocationXHMTLHandler",
+          "description": "NOTE mismatch (Location handler). Requires validation.",
+          "securedBy": "library (uses security.getLibrary() for list items).",
+          "submenus": [
+            "List of Locations (listOfItems(library,...)).",
+            "Each Location item (Id!=0) exposes a child link to 'Location' (Material Resources) regardless of additional permission; permission gating already applied at top-level listing via library."
+          ]
+        },
+        {
+          "key": "Library",
+          "evidence": "SystemSetup.java – `...put(\"Library\", CategoryXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.category.xhtml.CategoryXHTMLHandler",
+          "description": "Category/Library taxonomy; mismatch with Categories above (requires validation).",
+          "securedBy": "library (security.getLibrary()).",
+          "submenus": [
+            "Category list -> listOfItems(library,...).",
+            "For each Category (Id!=0) adds child link to 'Categories' which actually points to Location handler (label 'Location'). This creates cross-linking between Library and Categories keys."
+          ]
+        },
+        {
+          "key": "RCollectionsVP",
+          "evidence": "SystemSetup.java – `...put(\"RCollectionsVP\", RCollectionVPXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.collections.xhtml.RCollectionVPXHTMLHandler",
+          "description": "Resource collection variant/perspective (VP meaning not defined).",
+          "securedBy": "Unknown",
+          "submenus": []
+        },
+        {
+          "key": "Processes",
+          "evidence": "SystemSetup.java – `...put(\"Processes\", ProcessXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.process.xhtml.ProcessXHTMLHandler",
+          "description": "Generic process definitions (inferred).",
+          "securedBy": "Unknown",
+          "submenus": []
+        }
+      ]
+    },
+    {
+      "group": "E. Time, Calendar & Scheduling Configuration",
+      "items": [
+        {
+          "key": "DayTypes",
+          "evidence": "SystemSetup.java – `...put(\"DayTypes\", DayTypeXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.daytype.xhtml.DayTypeXHTMLHandler",
+          "description": "Day classification (inferred).",
+          "securedBy": "dayTypes (uses `security.getDayTypes()` in `getChildren`).",
+          "submenus": [
+            "Day type list (Id==0) -> listOfItems(security.getDayTypes(), label \"Day type\").",
+            "No conditional deeper nodes emitted by this handler.",
+            "Visibility logic: Node rendered only when user has dayTypes > Security.NONE.",
+            "EDIT level (3) enables Add links inside JSP forms (observed in `DayTypePenalties.jsp`)."
+          ]
+        },
+        {
+          "key": "DaysRulesGroups",
+          "evidence": "SystemSetup.java – `...put(\"DaysRulesGroups\", DayRequestXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.daysrequest.xhtml.DayRequestXHTMLHandler",
+          "description": "Day off rules grouping entities.",
+          "securedBy": "daysOffRulesGroups (uses `security.getDaysOffRulesGroups()`).",
+          "submenus": [
+            "Day off rules group list (Id==0) -> listOfItems(security.getDaysOffRulesGroups(), label \"Day off rules group\").",
+            "No additional child links produced by handler.",
+            "Visibility logic: Add links available at EDIT level inside JSP (`RulesDetails.jsp`)."
+          ]
+        },
+        {
+          "key": "TKHolidays",
+          "evidence": "SystemSetup.java – `...put(\"TKHolidays\", TKHolidaysXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.TKHoliday.xhtml.TKHolidaysXHTMLHandler",
+          "description": "Holiday definitions.",
+          "securedBy": "timeZones for top-level listing (handler comment notes default).",
+          "submenus": [
+            "Holiday list (Id==0) -> listOfItems(security.getTimeZones(), label \"Holiday\", LastItem flag depends on GMTOffsets permission).",
+            "Holiday Occurrences link (Id!=0) -> adds `<A ... onclick=getChildren('HolidaysOcurrences')>` only if `security.getGMTOffsets() > Security.NONE`.",
+            "Visibility logic: Without GMTOffsets permission, individual Holiday nodes are terminal."
+          ]
+        },
+        {
+          "key": "HolidaysOcurrences",
+          "evidence": "SystemSetup.java – `...put(\"HolidaysOcurrences\", HolidaysOcurrencesXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.holidayocurrences.xhtml.HolidaysOcurrencesXHTMLHandler",
+          "description": "Occurrence instances for a specific holiday.",
+          "securedBy": "gmtOffsets (uses `security.getGMTOffsets()` in listing call).",
+          "submenus": [
+            "Holiday Occurrence list (Id==0) -> listOfHolidaysOcurrences(security.getGMTOffsets(), label \"Holiday Occurrence\").",
+            "No deeper nodes.",
+            "Visibility logic: EDIT level shows Add occurrence link (checks `security == Security.EDIT`)."
+          ]
+        },
+        {
+          "key": "TimeZones",
+          "evidence": "SystemSetup.java – `...put(\"TimeZones\", TimeZoneXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.timezone.xhtml.TimeZoneXHTMLHandler",
+          "description": "Time zone configuration.",
+          "securedBy": "timeZones (for listing), plus conditional gmtOffsets for child link.",
+          "submenus": [
+            "Time Zone list (Id==0) -> listOfItems(security.getTimeZones(), label \"Time Zone\", LastItem flag true when user lacks GMTOffsets permission).",
+            "GMT Offsets child link (Id!=0 and `security.getGMTOffsets() > Security.NONE`) -> adds node loading key 'GMTOffsets'.",
+            "Visibility logic: GMTOffsets permission toggles presence of nested link; without it timezone entries are LastItem."
+          ]
+        },
+        {
+          "key": "GMTOffsets",
+          "evidence": "SystemSetup.java – `...put(\"GMTOffsets\", GMTOffsetXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.timezone.gmtoffset.xhtml.GMTOffsetXHTMLHandler",
+          "description": "Date/time offset snapshots tied to a specific time zone.",
+          "securedBy": "gmtOffsets (uses `security.getGMTOffsets()`; Add link only at EDIT level inside listOfGMTOffsets).",
+          "submenus": [
+            "GMT Offset instances (Id==0) -> listOfGMTOffsets(security.getGMTOffsets(), label \"GMT offset\").",
+            "No further nesting.",
+            "Visibility logic: If user has EDIT, an 'Add GMT offset' menu entry (MenuAdd) is rendered."
+          ]
+        },
+        {
+          "key": "OvertimeTypes",
+          "evidence": "SystemSetup.java – `...put(\"OvertimeTypes\", OverTimeTypeXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.overTime.xhtml.OverTimeTypeXHTMLHandler",
+          "description": "Overtime classification catalog.",
+          "securedBy": "overTimeCatalog (uses `security.getOverTimeCatalog()`).",
+          "submenus": ["Overtime Type list (Id==0) -> listOfItems(security.getOverTimeCatalog(), label \"Overtime Type\").",
+            "No deeper nodes.",
+            "Visibility logic: Add link appears when overTimeCatalog == Security.EDIT."
+          ]
+        },
+        {
+          "key": "Penalties",
+          "evidence": "SystemSetup.java – `...put(\"Penalties\", PenaltyXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.penalty.xhtml.PenaltyXHTMLHandler",
+          "description": "Penalty rules catalog.",
+          "securedBy": "penalties (uses `security.getPenalties()`).",
+          "submenus": [
+            "Penalty list (Id==0) -> listOfItems(security.getPenalties(), label \"Penalty\").",
+            "No child link emission.",
+            "Visibility logic: EDIT level allows Add (handled by listOfItems when security==EDIT)."
+          ]
+        },
+        {
+          "key": "ActivityFlags",
+          "evidence": "SystemSetup.java – `...put(\"ActivityFlags\", ActivityFlagXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.activityflag.xhtml.ActivityFlagXHTMLHandler",
+          "description": "Activity flag configuration.",
+          "securedBy": "activityFlag (uses `security.getActivityFlag()`).",
+          "submenus": [
+            "Activity Flag list (Id==0) -> listOfItems(security.getActivityFlag(), label \"Activity Flag\").",
+            "No deeper nodes.",
+            "Visibility logic: EDIT level enables Add link via listOfItems."
+          ]
+        }
+      ]
+    },
+    {
+      "group": "F. Contracts & Agreements",
+      "items": [
+        {
+          "key": "Contracts",
+          "evidence": "SystemSetup.java – `...put(\"Contracts\", ContractXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.contract.xhtml.ContractXHTMLHandler",
+          "description": "Contract records (inferred).",
+          "securedBy": "contracts (uses `security.getContracts()` when `objName` != `ContractGroups`).",
+          "submenus": [
+            "Contract list -> listOfItems(security.getContracts(), \"Contract\", ...) (LastItem true when `security.getRulesGroups()==Security.NONE`).",
+            "Rules groups (Id!=0) -> added only if `security.getRulesGroups() > Security.NONE` (loads key `ContractGroups`)."
+          ]
+        },
+        {
+          "key": "ContractGroups",
+          "evidence": "SystemSetup.java – `...put(\"ContractGroups\", ContractXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.contract.xhtml.ContractXHTMLHandler",
+          "description": "Grouping of contracts / rules groups (inferred).",
+          "securedBy": "rulesGroups (uses `security.getRulesGroups()` when `objName == \"ContractGroups\"`).",
+          "submenus": [
+            "Rules group list -> listOfItems(security.getRulesGroups(), \"Rules group\", ...) (LastItem always true; deeper child link appears only from Contracts context)."
+          ]
+        },
+        {
+          "key": "ContractsRevisions",
+          "evidence": "SystemSetup.java – `...put(\"ContractsRevisions\", ContractsRevisionXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.contractrevision.xhtml.ContractsRevisionXHTMLHandler",
+          "description": "Contract revision records.",
+          "securedBy": "rulesGroups (listing gated by `security.getRulesGroups()`).",
+          "submenus": [
+            "Contract Revision list -> listOfContractRevisions(security.getRulesGroups(),...) (Add at EDIT)."
+          ]
+        },
+        {
+          "key": "Agreements",
+          "evidence": "SystemSetup.java – `...put(\"Agreements\", AgreementsXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.agreement.xhtml.AgreementsXHTMLHandler",
+          "description": "Agreement / contract adjuncts.",
+          "securedBy": "contracts (top-level list uses `security.getContracts()`), with conditional dependency on rulesGroups for child link.",
+          "submenus": [
+            "Agreement list (Id==0) -> listOfItems(security.getContracts(),\"Agreement\",...) (LastItem when `security.getRulesGroups()==Security.NONE`).",
+            "Contracts (child link, Id!=0) -> appears only if `security.getRulesGroups() > Security.NONE` (loads key `TkContracts`)."
+          ]
+        },
+        {
+          "key": "TkContracts",
+          "evidence": "SystemSetup.java – `...put(\"TkContracts\", TkContractsXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.tkcontract.xhtml.TkContractsXHTMLHandler",
+          "description": "Timekeeper contracts hierarchy.",
+          "securedBy": "rulesGroups (uses `security.getRulesGroups()` for listing and child link gating).",
+          "submenus": [
+            "Contract list (Id==0) -> listOfItems(security.getRulesGroups(), \"Contract\", ...) (LastItem true when user lacks rulesGroups EDIT).",
+            "Contracts Revisions (child link, Id!=0) -> appears only if `security.getRulesGroups() > Security.NONE` (loads key `ContractsRevisions`)."
+          ]
+        }
+      ],
+      "permissionDependencyChain": "contracts controls visibility of Contracts & Agreements lists; rulesGroups unlocks nested: Rules groups (from Contracts), Contracts (from Agreements), Contracts Revisions (from TkContracts), and contract revision listing."
+    },
+    {
+      "group": "G. Payroll & Financial Codes",
+      "items": [
+        {
+          "key": "EarningCodes",
+          "evidence": "SystemSetup.java – `...put(\"EarningCodes\", EarningCodesXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.earningcodes.xhtml.EarningCodesXHTMLHandler",
+          "description": "Earning/payroll codes.",
+          "securedBy": "earningCodes (uses `security.getEarningCodes()`).",
+          "submenus": ["Earning Codes list -> listOfItems(security.getEarningCodes(), \"EarningCodes\", ...) (Add at EDIT)."]
+        },
+        {
+          "key": "PayTransactions",
+          "evidence": "SystemSetup.java – `...put(\"PayTransactions\", PayTransactionsXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.paytransaction.xhtml.PayTransactionsXHTMLHandler",
+          "description": "Payroll transaction records.",
+          "securedBy": "(anomaly) timeZones (handler code calls `listOfItems(security.getTimeZones(), \"PayTransactions\", ...)` instead of `security.getPayTransactions()`).",
+          "anomalyNote": "Security.java defines `getPayTransactions()`; UserGroup security UI sets PayTransactions level, but handler does NOT reference it. Potential defect or intentional reuse of timeZones permission. Recommend verification and possible remediation.",
+          "submenus": ["Pay Transactions list -> gated indirectly by timeZones permission."]
+        }
+      ]
+    },
+    {
+      "group": "H. Codes, Indicators & Taxonomy",
+      "items": [
+        {
+          "key": "Indicators",
+          "evidence": "SystemSetup.java – `...put(\"Indicators\", IndicatorsXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.codegroup.indicators.xhtml.IndicatorsXHTMLHandler",
+          "description": "Indicator definitions.",
+          "securedBy": "indicators (uses `security.getIndicators()` in `listOfIndicators`).",
+          "submenus": ["Indicator list -> listOfIndicators(security.getIndicators(), ...) (Add at EDIT)."]
+        },
+        {
+          "key": "IndicatorsCodeGroups",
+          "evidence": "SystemSetup.java – `...put(\"IndicatorsCodeGroups\", CodeGroupXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.codegroup.xhtml.CodeGroupXHTMLHandler",
+          "description": "Indicator-associated code groups.",
+          "securedBy": "indicators (uses `security.getIndicators()` for both group listing and child link condition).",
+          "submenus": [
+            "Code Group list (Id==0) -> listOfItems(security.getIndicators(), \"IndicatorsCodeGroup\", ...).",
+            "Child links (Id!=0 and indicators > NONE): Indicators (loads key `Indicators`).",
+            "Child links (Id!=0 and indicators > NONE): Codes (loads key `Codes`)."
+          ]
+        },
+        {
+          "key": "Codes",
+          "evidence": "SystemSetup.java – `...put(\"Codes\", CodeXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.codegroup.code.xhtml.CodeXHTMLHandler",
+          "description": "Individual codes within a group.",
+          "securedBy": "indicators (handler uses `security.getIndicators()` for listing & Add gating).",
+          "submenus": ["Code list -> listOfCodes(security.getIndicators(), ...) (Add at EDIT)."]
+        },
+        {
+          "key": "ClientTypes",
+          "evidence": "SystemSetup.java – `...put(\"ClientTypes\", ClientTypeXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.clienttype.xhtml.ClientTypeXHTMLHandler",
+          "description": "Client category taxonomy.",
+          "securedBy": "(hardcoded) EDIT – handler calls `listOfItems(Security.EDIT, ...)` and fetches list with `byCompany(Security.YES, Security.EDIT,0)`; no direct `security.getClientTypes()`.",
+          "submenus": ["Client type list -> always shows Add option (since constant EDIT passed) for any user who can load menu; upstream menu visibility likely governed elsewhere."],
+          "note": "(Reaffirm) EmployeeTypes & ActivityFlags covered in earlier sections with explicit security (EmployeeTypes uses constant EDIT; ActivityFlags uses `security.getActivityFlag()`)."
+        }
+      ]
+    },
+    {
+      "group": "I. Workflow & Approvals",
+      "items": [
+        {
+          "key": "SecondLevelApprovals",
+          "evidence": "SystemSetup.java – `...put(\"SecondLevelApprovals\", SecondLevelApprovalXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.secondLevelApproval.xhtml.SecondLevelApprovalXHTMLHandler",
+          "description": "Second-level approver pools.",
+          "securedBy": "secondLevelApprovals (uses `security.getSecondLevelApprovals()`).",
+          "submenus": ["Approvers Pool list -> listOfItems(security.getSecondLevelApprovals(), \"Approvers Pool\", ...) (Add at EDIT)."]
+        }
+      ]
+    },
+    {
+      "group": "J. Scheduler (Quartz) Management",
+      "items": [
+        {
+          "key": "QuartzCP",
+          "evidence": "SystemSetup.java – `...put(\"QuartzCP\", QuartzCPXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.quartzcp.xhtml.QuartzCPXHTMLHandler",
+          "description": "Quartz scheduler control panel root.",
+          "securedBy": "quartzControlPanel (visibility + child insertion when `security.getQuartzControlPanel() > Security.NONE`).",
+          "submenus": [
+            "Job Groups (loads `QuartzJobGroup`).",
+            "Schedules (loads `QuartzSchedule`).",
+            "Feeds Status (direct link with time range params) – terminal node."
+          ]
+        },
+        {
+          "key": "QuartzSchedule",
+          "evidence": "SystemSetup.java – `...put(\"QuartzSchedule\", QuartzScheduleXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.quartzcp.schedule.xhtml.QuartzScheduleXHTMLHandler",
+          "description": "Schedule definitions.",
+          "securedBy": "quartzControlPanel (uses `security.getQuartzControlPanel()`).",
+          "submenus": ["Schedule list -> listOfItems(security.getQuartzControlPanel(), \"Schedule\", ...) (Add at EDIT)."]
+        },
+        {
+          "key": "QuartzJobGroup",
+          "evidence": "SystemSetup.java – `...put(\"QuartzJobGroup\", QuartzJobGroupXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.quartzcp.jobgroup.xhtml.QuartzJobGroupXHTMLHandler",
+          "description": "Job grouping container.",
+          "securedBy": "quartzControlPanel.",
+          "submenus": [
+            "Job Group list (Id==0) -> listOfItems(security.getQuartzControlPanel(), \"Job Group\", ...).",
+            "Jobs (child link, Id!=0) -> appears only if quartzControlPanel > NONE (loads key `QuartzJob`)."
+          ]
+        },
+        {
+          "key": "QuartzJob",
+          "evidence": "SystemSetup.java – `...put(\"QuartzJob\", QuartzJobXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.quartzcp.jobgroup.job.xhtml.QuartzJobXHTMLHandler",
+          "description": "Individual jobs.",
+          "securedBy": "quartzControlPanel.",
+          "submenus": [
+            "Job list (Id==0) -> listOfItems(security.getQuartzControlPanel(), \"Job\", ...).",
+            "Assigned Schedules (child link, Id!=0) -> appears when quartzControlPanel > NONE (loads key `QuartzJobSchedule`)."
+          ]
+        },
+        {
+          "key": "QuartzJobSchedule",
+          "evidence": "SystemSetup.java – `...put(\"QuartzJobSchedule\", QuartzJobSchedulesXHTMLHandler.xhtmlHandlerObject());`",
+          "handler": "com.nbcuni.dcss.storm.gsl.quartzcp.jobgroup.job.xhtml.QuartzJobSchedulesXHTMLHandler",
+          "description": "Schedules assigned to a specific job.",
+          "securedBy": "quartzControlPanel (parent gating; list call uses security value 0 to suppress Add).",
+          "submenus": ["Assigned Schedule list (Id==0) -> listOfItems(0, \"\", ...) (no Add regardless of permission)."]
+        }
+      ],
+      "permissionHierarchySummary": "Single permission `quartzControlPanel` gates entire scheduler tree. Child nodes do not introduce additional permission checks; they rely exclusively on root permission."
+    }
+  ],
+  "itemsNotBackedByHandlersSection": "Earlier drafts mentioned higher-level conceptual labels (e.g. Reports, Accounting, System, Resources as a top-level category). Only the concrete keys above are confirmed by direct handler registration. To enumerate report variants (Client Costing, Days Off, etc.) one would need to inspect additional JSPs under `Deployment/Storm2/WebContent/Reports/*` – this document avoids claiming dynamic handler-backed keys absent explicit registration lines.",
+  "gapsNextValidationSteps": [
+    "Extract per-handler internal permission constants / numeric levels (next pass: inspect each handler body for `security.` method calls or numeric comparisons, e.g. `if(security.get...` or `if(securityLevel >= ...)`).",
+    "Identify shared security constants (e.g., GetDayTypeSecurity) and map to handlers.",
+    "Distinguish between node visibility vs row filtering inside handlers.",
+    "Confirm any static JSP-level guards (scriptlet security checks) for static menu items (currently marked None)."
+  ],
+  "summary": "Total distinct dynamic object keys discovered (first-level): 57 (grouped; each presented as its own subsection). Security review pass 1: all dynamic handlers accept a `Security` parameter but specific permission values remain Unknown pending deeper code inspection." 
+}

@@ -117,11 +117,15 @@ class JavaReader(BaseReader):
             architectural_pattern = self._detect_architectural_pattern_from_config(file_path)
             entity_mappings = self.detect_entity_mapping(file_path, processed_content, structural_data)
             sql_executions = self.detect_sql_execution(file_path, processed_content, structural_data)
+            # NEW: Detect Java-side XHTML/security checks
+            java_security_checks = self.detect_java_security_checks(file_path, processed_content, structural_data)
             # Add layer and architectural information to structural data
             structural_data["detected_layer"] = detected_layer.value
             structural_data["architectural_pattern"] = architectural_pattern.value
             structural_data["entity_mappings"] = entity_mappings
             structural_data["sql_executions"] = sql_executions
+            # NEW: attach java security checks
+            structural_data["java_security_checks"] = java_security_checks
             # Calculate confidence
             confidence = self._calculate_confidence(structural_data)
             
@@ -2184,3 +2188,116 @@ class JavaReader(BaseReader):
         except (IndexError, ValueError) as e:
             self.logger.warning("Failed to extract method content for %s: %s", method.get('name', 'unknown'), str(e))
             return ""
+
+    def detect_java_security_checks(self, file_path: str, processed_content: str, structural_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Detect Java-side security checks relevant to XHTML rendering in handler methods.
+        Heuristics:
+        - hasRole/isUserInRole in Java code
+        - Security helper calls and numeric comparisons (getSecurityLevels/getSecurityGroups/getSecurity)
+        - Security enum references (Security.SOMETHING)
+        - Mark methods that likely emit XHTML (XHTMLEncoder usage or inline HTML literals / print statements)
+        Returns a list of hits with method context and evidence spans.
+        """
+        checks: List[Dict[str, Any]] = []
+        try:
+            # Precompile regexes
+            has_role_re = re.compile(r"hasRole\s*\(\s*['\"]([^'\"]+)['\"]\s*\)")
+            is_user_in_role_re = re.compile(r"isUserInRole\s*\(\s*['\"]([^'\"]+)['\"]\s*\)")
+            helper_levels_re = re.compile(r"(getSecurityLevels|getSecurityGroups|getSecurity)\s*\([^\)]*\)\s*([<>]=?|==)\s*(\d+)")
+            helper_call_re = re.compile(r"\b(getSecurityLevels|getSecurityGroups|getSecurity)\s*\(([^\)]*)\)")
+            security_enum_re = re.compile(r"\bSecurity\.[A-Z_]+\b")
+            html_literal_re = re.compile(r'"[^"\n]*<[a-zA-Z][^>]*>[^"\n]*"')
+            print_html_re = re.compile(r"\.print(?:ln)?\s*\(\s*\"<")
+            
+            for class_info in self._safe_get_classes(structural_data):
+                class_name = class_info.get('name', '')
+                for method in class_info.get('methods', []) or []:
+                    if not method.get('has_body', False):
+                        continue
+                    method_name = method.get('name', '')
+                    method_line_start = method.get('line_number', 0)
+                    method_line_end = method.get('end_line_number', method_line_start)
+                    method_content = method.get('body_text', '') or ''
+                    if not method_content:
+                        continue
+                    # Heuristic: does method likely emit XHTML/HTML?
+                    emits_xhtml = ('XHTMLEncoder' in method_content) or bool(html_literal_re.search(method_content) or print_html_re.search(method_content))
+                    # hasRole/isUserInRole
+                    for m in has_role_re.finditer(method_content):
+                        rel_line = method_content[:m.start()].count('\n') + 1
+                        checks.append({
+                            'file_path': file_path,
+                            'class_name': class_name,
+                            'method_name': method_name,
+                            'method_line_start': method_line_start,
+                            'method_line_end': method_line_end,
+                            'token_type': 'role',
+                            'tokens': [m.group(1)],
+                            'raw_text': m.group(0),
+                            'line': method_line_start + rel_line - 1,
+                            'emits_xhtml': emits_xhtml
+                        })
+                    for m in is_user_in_role_re.finditer(method_content):
+                        rel_line = method_content[:m.start()].count('\n') + 1
+                        checks.append({
+                            'file_path': file_path,
+                            'class_name': class_name,
+                            'method_name': method_name,
+                            'method_line_start': method_line_start,
+                            'method_line_end': method_line_end,
+                            'token_type': 'role',
+                            'tokens': [m.group(1)],
+                            'raw_text': m.group(0),
+                            'line': method_line_start + rel_line - 1,
+                            'emits_xhtml': emits_xhtml
+                        })
+                    # Helper numeric comparisons
+                    for m in helper_levels_re.finditer(method_content):
+                        rel_line = method_content[:m.start()].count('\n') + 1
+                        checks.append({
+                            'file_path': file_path,
+                            'class_name': class_name,
+                            'method_name': method_name,
+                            'method_line_start': method_line_start,
+                            'method_line_end': method_line_end,
+                            'token_type': 'group_level',
+                            'tokens': {'helper': m.group(1), 'op': m.group(2), 'value': int(m.group(3))},
+                            'raw_text': m.group(0),
+                            'line': method_line_start + rel_line - 1,
+                            'emits_xhtml': emits_xhtml
+                        })
+                    # Helper calls without comparison (contextual signal)
+                    for m in helper_call_re.finditer(method_content):
+                        rel_line = method_content[:m.start()].count('\n') + 1
+                        checks.append({
+                            'file_path': file_path,
+                            'class_name': class_name,
+                            'method_name': method_name,
+                            'method_line_start': method_line_start,
+                            'method_line_end': method_line_end,
+                            'token_type': 'helper_call',
+                            'tokens': {'helper': m.group(1), 'args': m.group(2)},
+                            'raw_text': m.group(0),
+                            'line': method_line_start + rel_line - 1,
+                            'emits_xhtml': emits_xhtml
+                        })
+                    # Security enum mentions (weaker signal)
+                    for m in security_enum_re.finditer(method_content):
+                        rel_line = method_content[:m.start()].count('\n') + 1
+                        checks.append({
+                            'file_path': file_path,
+                            'class_name': class_name,
+                            'method_name': method_name,
+                            'method_line_start': method_line_start,
+                            'method_line_end': method_line_end,
+                            'token_type': 'security_enum',
+                            'tokens': [m.group(0)],
+                            'raw_text': m.group(0),
+                            'line': method_line_start + rel_line - 1,
+                            'emits_xhtml': emits_xhtml
+                        })
+            return checks
+        except Exception as e:  # pylint: disable=broad-except
+            self.logger.warning("Failed to detect Java security checks: %s", str(e))
+            return checks

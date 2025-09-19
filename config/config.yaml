@@ -16,11 +16,11 @@ project:
 # ==============================================================================
 llm:
   # Provider selection - Choose which LLM provider to use
-  provider: "kong_aws"  # Options: "ollama", "openai", "kong_aws", "kong_azure", "kong_gcp"
+  provider: "ollama"  # Options: "ollama", "openai", "kong_aws", "kong_azure", "kong_gcp"
   
   # Request configuration (applies to all providers)
   temperature: 0.1
-  max_tokens: 4000
+  max_tokens: 1024
   top_p: 0.9
   json_mode: true            # new
   citation_required: true    # new
@@ -69,7 +69,7 @@ llm:
   # Fallback providers
   ollama:
     base_url: "http://localhost:11434"
-    model: "llama3.1:70b"
+    model: "llama3:instruct"
     timeout: 300
   
   openai:
@@ -163,16 +163,16 @@ steps:
     enable_sql_edges_jsp: false
     enable_sql_edges_sqlfiles: true
     enable_security_roles: true
-    enable_jsp_security_detection: false
+    enable_jsp_security_detection: true
     enable_trace_enrichment: true
-    enable_business_rules_extraction: false
+    enable_business_rules_extraction: true
     security:
       patterns: []   # project can override
     rules:
       files: ["validation.xml", "validator-rules.xml"]
 
   step05:
-    llm_provider: "kong_aws"  # Can override global LLM provider
+    llm_provider: "ollama"  # Can override global LLM provider
     batch_size: 5
     max_context_length: 8000
     confidence_threshold: 0.6

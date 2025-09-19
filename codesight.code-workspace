@@ -7,10 +7,10 @@
 			"path": "../ct-hr-storm"
 		},
 		{
-			"path": "../simple-ddl-parser"
+			"path": "../../PocketFlow-Tutorial-Codebase-Knowledge"
 		},
 		{
-			"path": "../../PocketFlow-Tutorial-Codebase-Knowledge"
+			"path": "../codesight-llm"
 		}
 	],
 	"settings": {
@@ -34,6 +34,7 @@
 		},
 		"java.project.sourcePaths": [],
 		"java.project.referencedLibraries": [],
-		"redhat.telemetry.enabled": false
+		"redhat.telemetry.enabled": false,
+		"liveServer.settings.multiRootWorkspaceName": "codesight"
 	}
 }

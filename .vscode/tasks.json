@@ -9,8 +9,15 @@
 			"group": "test",
 			"isBackground": false,
 			"problemMatcher": [
-				"$pytest"
+				"$python"
 			]
+		},
+		{
+			"label": "Run Step05 (ct-hr-storm)",
+			"type": "shell",
+			"command": "conda run --live-stream --name codesight-py312 python main.py ct-hr-storm --steps step05",
+			"group": "test",
+			"isBackground": false
 		}
 	]
 }

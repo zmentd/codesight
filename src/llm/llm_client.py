@@ -70,7 +70,9 @@ class LLMClient:
         
         # Access LLM configuration from the dataclass structure
         self.provider = LLMProvider(config.llm.provider)
+        # NOTE: LLMConfig.model is a property that returns provider-specific model
         self.model = getattr(config.llm, 'model', 'gpt-3.5-turbo')
+        # Base URL/API keys are provider-specific; will be read in per-provider calls
         self.api_key = getattr(config.llm, 'api_key', None)
         self.base_url = getattr(config.llm, 'base_url', None)
         self.max_tokens = config.llm.max_tokens
@@ -82,31 +84,19 @@ class LLMClient:
         """Initialize the LLM client based on provider."""
         try:
             if self.provider == LLMProvider.OPENAI:
-                # Initialize OpenAI client
-                # import openai
-                # self.client = openai.OpenAI(api_key=self.api_key)
+                # Initialize OpenAI client (deferred to call time)
                 pass
             
             elif self.provider == LLMProvider.AZURE_OPENAI:
-                # Initialize Azure OpenAI client
-                # import openai
-                # self.client = openai.AzureOpenAI(
-                #     api_key=self.api_key,
-                #     azure_endpoint=self.base_url,
-                #     api_version="2024-02-01"
-                # )
+                # Initialize Azure OpenAI client (deferred)
                 pass
             
             elif self.provider == LLMProvider.ANTHROPIC:
-                # Initialize Anthropic client
-                # import anthropic
-                # self.client = anthropic.Anthropic(api_key=self.api_key)
+                # Initialize Anthropic client (deferred)
                 pass
             
             elif self.provider == LLMProvider.OLLAMA:
-                # Initialize Ollama client
-                # import ollama
-                # self.client = ollama.Client(host=self.base_url or "http://localhost:11434")
+                # Using HTTP API; no client object needed
                 pass
             
             self.logger.info("LLM client initialized for provider: %s", self.provider.value)
@@ -145,7 +135,7 @@ class LLMClient:
             "component_type": "string",
             "design_patterns": ["string"],
             "framework_dependencies": ["string"],
-            "key_methods": [{"name": "string", "purpose": "string"}],
+            "key_methods": [{{"name": "string", "purpose": "string"}}],
             "issues": ["string"],
             "improvements": ["string"],
             "dependencies": ["string"]
@@ -410,8 +400,22 @@ class LLMClient:
             LLMResponse with the result
         """
         try:
-            # Placeholder implementation
-            # This would make actual API calls to the configured LLM provider
+            # Infer whether the caller expects strict JSON output
+            def _wants_json(p: str, s: Optional[str]) -> bool:
+                try:
+                    marker_hits = [
+                        "OUTPUT_JSON:",
+                        "Return strict JSON",
+                        "Respond with ONLY",
+                        "Return JSON with keys",
+                        '"domain":',
+                        '"name":',
+                    ]
+                    txt = (p or "") + "\n" + (s or "")
+                    return any(m in txt for m in marker_hits)
+                except Exception:
+                    return False
+            json_mode = _wants_json(prompt, system_message)
             
             if self.provider == LLMProvider.OPENAI:
                 return self._call_openai(prompt, system_message)
@@ -420,7 +424,7 @@ class LLMClient:
             elif self.provider == LLMProvider.ANTHROPIC:
                 return self._call_anthropic(prompt, system_message)
             elif self.provider == LLMProvider.OLLAMA:
-                return self._call_ollama(prompt, system_message)
+                return self._call_ollama(prompt, system_message, json_mode=json_mode)
             else:
                 return LLMResponse(
                     success=False,
@@ -463,14 +467,56 @@ class LLMClient:
             usage={"total_tokens": 160}
         )
     
-    def _call_ollama(self, prompt: str, system_message: Optional[str] = None) -> LLMResponse:
-        """Call Ollama local API."""
-        # Placeholder implementation
-        return LLMResponse(
-            success=True,
-            content='{"component_type": "entity", "design_patterns": ["jpa"], "framework_dependencies": ["hibernate"]}',
-            metadata={"model": self.model}
-        )
+    def _call_ollama(self, prompt: str, system_message: Optional[str] = None, json_mode: bool = False) -> LLMResponse:
+        """Call Ollama local API using HTTP (no streaming)."""
+        try:
+            import requests  # type: ignore[import-untyped]  # local import to avoid hard dependency if not used
+        except ImportError as e:
+            return LLMResponse(success=False, content="", error_message=f"requests not installed: {e}")
+        
+        # Resolve provider-specific settings
+        try:
+            ollama_cfg = getattr(self.config.llm, 'ollama', None)
+        except Exception:  # pragma: no cover - defensive
+            ollama_cfg = None
+        base_url = None
+        timeout = 300
+        try:
+            base_url = getattr(ollama_cfg, 'base_url', None) or "http://localhost:11434"
+            timeout = int(getattr(ollama_cfg, 'timeout', 300) or 300)
+        except Exception:
+            base_url = "http://localhost:11434"
+            timeout = 300
+        model = self.model or (getattr(ollama_cfg, 'model', None) if ollama_cfg else None) or "llama3.1:8b"
+        
+        url = base_url.rstrip('/') + "/api/generate"
+        # Incorporate system message if provided
+        full_prompt = f"{system_message}\n\n{prompt}" if system_message else prompt
+        payload: Dict[str, Any] = {
+            "model": model,
+            "prompt": full_prompt,
+            "stream": False,
+            "options": {
+                "temperature": float(self.temperature) if self.temperature is not None else 0.1,
+                # Bound max tokens if supported by the model; Ollama treats num_predict as max new tokens
+                "num_predict": int(self.max_tokens) if self.max_tokens else 4000,
+            },
+        }
+        # Enable strict JSON formatting when requested
+        if json_mode:
+            payload["format"] = "json"
+        try:
+            resp = requests.post(url, json=payload, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            text = str(data.get("response", "")).strip()
+            if not text:
+                return LLMResponse(success=False, content="", error_message="Empty response from Ollama", metadata={"model": model, "provider": "ollama"})
+            return LLMResponse(success=True, content=text, metadata={"model": model, "provider": "ollama"})
+        except requests.exceptions.RequestException as e:
+            return LLMResponse(success=False, content="", error_message=f"Ollama HTTP error: {e}")
+        except (ValueError, json.JSONDecodeError) as e:
+            return LLMResponse(success=False, content="", error_message=f"Ollama parse error: {e}")
     
     def test_connection(self) -> bool:
         """Test connection to the LLM provider."""

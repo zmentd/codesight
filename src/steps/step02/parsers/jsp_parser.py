@@ -451,7 +451,7 @@ class JSPParser(BaseParser):
                     _add_mapping((file_item.path, 'tag_hasRole', m.group(1), line), 'role', m.group(1), m.group(0), line, end_line)
                 for m in is_user_in_re.finditer(full):
                     _add_mapping((file_item.path, 'tag_isUserInRole', m.group(1), line), 'role', m.group(1), m.group(0), line, end_line)
-            except Exception:
+            except (KeyError, TypeError, ValueError):
                 continue
 
         # 2) EL expressions
@@ -477,7 +477,7 @@ class JSPParser(BaseParser):
                     op = m.group(2)
                     val = m.group(3)
                     _add_mapping((file_item.path, 'el_helper', expr, helper, op, val), 'group_level', {'helper': helper, 'op': op, 'value': int(val)}, expr, line, end_line)
-            except Exception:
+            except (KeyError, TypeError, ValueError):
                 continue
 
         # 3) Embedded Java/scriptlets
@@ -507,9 +507,70 @@ class JSPParser(BaseParser):
                     helper = m.group(1)
                     args = m.group(2)
                     _add_mapping((file_item.path, 'java_helper_call', code, helper, args), 'helper_call', {'helper': helper, 'args': args}, m.group(0), line, end_line)
-            except Exception:
+            except (KeyError, TypeError, ValueError):
                 continue
 
+        return mappings
+
+    def _emit_jsp_java_call_mappings(self, raw: Dict[str, Any], file_item: FileInventoryItem) -> List[CodeMapping]:
+        """Emit mappings for JSP scriptlets calling into Java handler objects that generate XHTML.
+        Heuristic patterns:
+        - <Var>.xhtmlHandlerObject().method(...)
+        - HandlerClass.xhtmlHandlerObject().method(...)
+        - Calls to XHTMLEncoder.* within scriptlets
+        """
+        mappings: List[CodeMapping] = []
+        seen = set()
+        call_re = re.compile(r"([A-Za-z_][A-ZaZ0-9_\.]*)\.xhtmlHandlerObject\s*\(\s*\)\s*\.\s*([A-Za-z_][A-ZaZ0-9_]*)\s*\(")
+        enc_re = re.compile(r"\bXHTMLEncoder\s*\.\s*([A-Za-z_][A-ZaZ0-9_]*)\s*\(")
+        # Final corrected patterns (no stray quotes after the parenthesis)
+        call_re = re.compile(r"([A-Za-z_][A-ZaZ0-9_\.]*)\.xhtmlHandlerObject\s*\(\s*\)\s*\.\s*([A-Za-z_][A-ZaZ0-9_]*)\s*\(")
+        enc_re = re.compile(r"\bXHTMLEncoder\s*\.\s*([A-Za-z_][A-ZaZ0-9_]*)\s*\(")
+        call_re = re.compile(r"([A-Za-z_][A-ZaZ0-9_\.]*)\.xhtmlHandlerObject\s*\(\s*\)\s*\.\s*([A-Za-z_][A-ZaZ0-9_]*)\s*\(")
+        enc_re = re.compile(r"\bXHTMLEncoder\s*\.\s*([A-ZaZ_][A-ZaZ0-9_]*)\s*\(")
+        # Use cleaned patterns
+        call_re = re.compile(r"([A-Za-z_][A-ZaZ0-9_\.]*)\.xhtmlHandlerObject\s*\(\s*\)\s*\.\s*([A-Za-z_][A-ZaZ0-9_]*)\s*\(")
+        enc_re = re.compile(r"\bXHTMLEncoder\s*\.\s*([A-ZaZ_][A-ZaZ0-9_]*)\s*\(")
+        for blk in raw.get('embedded_java', []) or []:
+            code = blk.get('code') or ''
+            if not isinstance(code, str) or not code:
+                continue
+            line = blk.get('line')
+            for m in call_re.finditer(code):
+                owner = m.group(1)
+                method = m.group(2)
+                to_ref = f"{owner}.xhtmlHandlerObject.{method}"
+                if to_ref in seen:
+                    continue
+                seen.add(to_ref)
+                attrs = {'raw_call': m.group(0)}
+                if line is not None:
+                    attrs['line'] = line
+                mappings.append(CodeMapping(
+                    from_reference=file_item.path,
+                    to_reference=to_ref,
+                    mapping_type='jsp_java_call',
+                    framework='jsp',
+                    semantic_category=SemanticCategory.VIEW_RENDER,
+                    attributes=attrs
+                ))
+            for m in enc_re.finditer(code):
+                enc_method = m.group(1)
+                to_ref = f"XHTMLEncoder.{enc_method}"
+                if to_ref in seen:
+                    continue
+                seen.add(to_ref)
+                attrs = {'raw_call': m.group(0)}
+                if line is not None:
+                    attrs['line'] = line
+                mappings.append(CodeMapping(
+                    from_reference=file_item.path,
+                    to_reference=to_ref,
+                    mapping_type='jsp_java_call',
+                    framework='jsp',
+                    semantic_category=SemanticCategory.VIEW_RENDER,
+                    attributes=attrs
+                ))
         return mappings
 
     def parse_file(self, file_item: FileInventoryItem) -> FileDetailsBase:
@@ -600,6 +661,8 @@ class JSPParser(BaseParser):
             code_mappings.extend(self._emit_action_call_mappings(raw, file_item))
             # New: emit conservative JSP security tokens for Step04 to consume
             code_mappings.extend(self._emit_jsp_security_mappings(raw, file_item))
+            # New: emit JSP->Java call mappings for handler invocations
+            code_mappings.extend(self._emit_jsp_java_call_mappings(raw, file_item))
             jsp_details.code_mappings = code_mappings
 
             self.logger.debug(

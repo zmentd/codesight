@@ -112,6 +112,8 @@ class Struts1xParser:
             action_path = action_mapping_data.get("path", "")
             action_type = action_mapping_data.get("type", "")
             action_parameter = action_mapping_data.get("parameter", "")
+            # New: capture Struts 1.x form-bean name if present
+            form_name = action_mapping_data.get("name", "")
             
             self.logger.debug("Processing Struts 1.x action_mapping: path=%s, type=%s, parameter=%s", 
                              action_path, action_type, action_parameter)
@@ -127,7 +129,9 @@ class Struts1xParser:
                     attributes={
                         "parameter": action_parameter,
                         "scope": action_mapping_data.get("scope", "request"),
-                        "validate": str(action_mapping_data.get("validate", "false"))
+                        "validate": str(action_mapping_data.get("validate", "false")),
+                        # New: expose form-bean name for downstream linking
+                        "form_name": form_name or "",
                     }
                 )
                 config_details.code_mappings.append(code_mapping)

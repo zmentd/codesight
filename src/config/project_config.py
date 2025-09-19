@@ -32,6 +32,9 @@ class ProjectSpecificConfig:
     
     # Project-specific language patterns settings
     languages_patterns_overrides: Dict[str, Any] = field(default_factory=dict)
+    
+    # Project-specific quality gates settings
+    quality_gates_overrides: Dict[str, Any] = field(default_factory=dict)
 
 
 class ProjectConfigManager:
@@ -83,6 +86,7 @@ class ProjectConfigManager:
                 frameworks_overrides=config_data.get('frameworks', {}),
                 languages_patterns_overrides=config_data.get('languages_patterns', {}),
                 jsp_analysis_overrides=config_data.get('jsp_analysis', {}),
+                quality_gates_overrides=config_data.get('quality_gates', {}),
             )
             
             self.loaded_projects[project_name] = project_config

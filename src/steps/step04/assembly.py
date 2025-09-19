@@ -12,9 +12,11 @@ from steps.step04.builders import DataAccessBuilder, RouteBuilder
 from steps.step04.evidence import EvidenceUtils
 from steps.step04.handlers import ActionLinker
 from steps.step04.jaxrs import JaxRsLinkerPlugin
-from steps.step04.linker import Linker
+
+# from steps.step04.linker import Linker  # deferred import to avoid analysis-time parse issues
 from steps.step04.models import Entity, Evidence, Relation, Step04Output
 from steps.step04.plugins import LinkerPlugin
+from steps.step04.rules import BusinessRulesBuilder
 from steps.step04.security import SecurityBuilder
 from steps.step04.tracer import TraceBuilder
 
@@ -24,12 +26,18 @@ class Step04Assembler:
 
     def __init__(self, cfg: Step04Config | None = None) -> None:
         self.route_builder = RouteBuilder()
-        self.linker = Linker()
+        # Defer Linker import to runtime
+        try:
+            from steps.step04.linker import Linker as _RuntimeLinker
+        except (ImportError, ModuleNotFoundError, AttributeError, SyntaxError):  # pragma: no cover - fallback for relative import in certain packaging contexts
+            from .linker import Linker as _RuntimeLinker
+        self.linker = _RuntimeLinker()
         self.data_builder = DataAccessBuilder()
         self.security_builder = SecurityBuilder()
         self.tracer = TraceBuilder()
         self.action_linker = ActionLinker()
         self.evidence = EvidenceUtils()
+        self.rules_builder = BusinessRulesBuilder()
         self.cfg: Step04Config | None = cfg
         # Extensible plugin list for framework/linker extensions (guarded by toggles)
         self.plugins: List[LinkerPlugin] = []
@@ -71,7 +79,7 @@ class Step04Assembler:
         jsp_action_rels: List[Relation] = []
         try:
             jsp_action_entities, jsp_action_rels = self.linker.link_jsps_to_routes(step02, routes)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             jsp_action_entities, jsp_action_rels = {}, []
 
         entity_index: Dict[str, Entity] = {}
@@ -127,6 +135,18 @@ class Step04Assembler:
                         r.evidence.append(ev)
             relations.extend(new_rels)
 
+        # Business rules extraction (validation rules) — guarded by enable_business_rules_extraction
+        rule_entities: Dict[str, Entity] = {}
+        rule_rels: List[Relation] = []
+        if not self.cfg or getattr(self.cfg, 'enable_business_rules_extraction', False):
+            try:
+                rule_entities, rule_rels = self.rules_builder.build_rules(step02, {**routes, **{eid: entity_index[eid] for eid in entity_index if eid.startswith('route_')}})
+            except Exception:
+                rule_entities, rule_rels = {}, []
+        for e in rule_entities.values():
+            entity_index[e.id] = e
+        relations.extend(rule_rels)
+
         # Build SP -> table operation map once from Step02 output
         self.data_builder.build_procedure_map(step02)
 
@@ -140,9 +160,14 @@ class Step04Assembler:
                     # Security edges (@RolesAllowed) — optional
                     if not self.cfg or getattr(self.cfg, 'enable_security_roles', True):
                         relations.extend(self.security_builder.build_roles_allowed(f.details))
-                    # Ensure method entities exist for from_id
-                    for r in rels:
-                        if r.from_id not in entity_index and r.from_id.startswith("method_"):
+                    # NEW: Java XHTML/security checks from Step02 code_mappings
+                    if not self.cfg or getattr(self.cfg, 'enable_java_security_detection', True):
+                        java_sec_rels = self.security_builder.build_java_security(f.details)
+                        relations.extend(java_sec_rels)
+                    # Ensure method entities exist for all method_ from_ids we produced
+                    for r in list(relations):
+                        if r.from_id.startswith("method_") and r.from_id not in entity_index:
+                            # Build minimal method entity
                             entity_index[r.from_id] = Entity(id=r.from_id, type="JavaMethod")
 
         # Data access: SQL files (optional, guarded by enable_sql_edges_sqlfiles)
@@ -163,12 +188,46 @@ class Step04Assembler:
                     # Ensure JSP entities exist for from_id
                     for r in rels:
                         if r.from_id not in entity_index and r.from_id.startswith("jsp_"):
-                            # Build minimal JSP entity if linker didn't already
+                            # Build JSP entity with classification if linker didn't already
                             stem = r.from_id[len("jsp_"):]
-                            entity_index[r.from_id] = Entity(id=r.from_id, type="JSP", name=stem, attributes={"file_path": self.evidence.normalize_path(f.path)})
+                            file_path = self.evidence.normalize_path(f.path)
+                            
+                            # Apply JSP classification if we have valid file path
+                            if file_path:
+                                # Get JSP details for classification
+                                details = f.details if isinstance(f.details, JspDetails) else None
+                                
+                                try:
+                                    from steps.step04.jsp_classifier import JspClassifier
+                                    classifier = JspClassifier()
+                                    classification = classifier.classify_jsp(file_path, details)
+                                    
+                                    attributes = {
+                                        "file_path": file_path,
+                                        "jsp_function_type": classification['jsp_function_type'],
+                                        "is_component": classification['is_component'],
+                                        "ui_complexity": classification['ui_complexity'],
+                                        "has_forms": classification['has_forms'],
+                                        "has_security": classification['has_security'],
+                                        "classification_confidence": classification['classification_confidence']
+                                    }
+                                    
+                                    if classification.get('business_domain'):
+                                        attributes['business_domain'] = classification['business_domain']
+                                    if classification.get('navigation_role'):
+                                        attributes['navigation_role'] = classification['navigation_role']
+                                        
+                                except ImportError:
+                                    # Fallback without classification
+                                    attributes = {"file_path": file_path}
+                            else:
+                                # Fallback when no file path
+                                attributes = {"file_path": "unknown"}
+                            
+                            entity_index[r.from_id] = Entity(id=r.from_id, type="JSP", name=stem, attributes=attributes)
 
         # New: JSP security detection (Step02 signals) — guarded by enable_jsp_security_detection
-        if self.cfg and getattr(self.cfg, 'enable_jsp_security_detection', False):
+        if not self.cfg or getattr(self.cfg, 'enable_jsp_security_detection', True):
             jsp_sec_entities, jsp_sec_rels = self.security_builder.build_jsp_security(step02)
             # Merge JSP entities discovered via security scan
             for e in jsp_sec_entities.values():
@@ -237,21 +296,21 @@ class Step04Assembler:
                         continue
                     existing_ids.add(new_id)
                     # Prefer route source evidence; fallback to aggregated JSP evidence
-                    evs: List[Evidence] = []
+                    route_evs: List[Evidence] = []
                     route_ent = entity_index.get(route_id)
                     if route_ent and getattr(route_ent, 'source_refs', None):
-                        evs.append(self.evidence.build_evidence_from_source_ref(route_ent.source_refs[0]))
+                        route_evs.append(self.evidence.build_evidence_from_source_ref(route_ent.source_refs[0]))
                     else:
                         # attach deduped JSP evidence
-                        evs = self.evidence.dedupe_evidence(self.evidence.maybe_sample_evidence(evs_list, new_id))
+                        route_evs = self.evidence.dedupe_evidence(self.evidence.maybe_sample_evidence(evs_list, new_id))
                     relations.append(
                         Relation(
                             id=new_id,
                             from_id=route_id,
                             to_id=f"role_{role_name}",
                             type="securedBy",
-                            confidence=0.7,
-                            evidence=evs,
+                            confidence=0.9,
+                            evidence=route_evs,
                             rationale="propagated from rendered JSP security",
                         )
                     )
@@ -262,6 +321,40 @@ class Step04Assembler:
 
         # Ensure target resource entities exist
         for r in relations:
+            # Ensure method and JSP entities exist when securedBy was produced before route/method linking
+            if r.type == "securedBy" and r.from_id.startswith("method_") and r.from_id not in entity_index:
+                entity_index[r.from_id] = Entity(id=r.from_id, type="JavaMethod")
+            if r.type == "securedBy" and r.from_id.startswith("jsp_") and r.from_id not in entity_index:
+                # Create JSP entity with classification for securedBy relationships
+                stem = r.from_id[len("jsp_"):]
+                
+                try:
+                    from steps.step04.jsp_classifier import JspClassifier
+                    classifier = JspClassifier()
+                    # For securedBy relations, we don't have the original JSP file context
+                    # So we'll do minimal classification based on the entity name
+                    classification = classifier.classify_jsp(stem, None)
+                    
+                    attributes = {
+                        "file_path": f"unknown/{stem}",
+                        "jsp_function_type": classification['jsp_function_type'],
+                        "is_component": classification['is_component'],
+                        "ui_complexity": classification['ui_complexity'],
+                        "has_forms": classification['has_forms'],
+                        "has_security": classification['has_security'],
+                        "classification_confidence": classification['classification_confidence']
+                    }
+                    
+                    if classification.get('business_domain'):
+                        attributes['business_domain'] = classification['business_domain']
+                    if classification.get('navigation_role'):
+                        attributes['navigation_role'] = classification['navigation_role']
+                        
+                except ImportError:
+                    # Fallback without classification
+                    attributes = {"file_path": f"unknown/{stem}"}
+                
+                entity_index[r.from_id] = Entity(id=r.from_id, type="JSP", name=stem, attributes=attributes)
             if r.to_id.startswith("table_") and r.to_id not in entity_index:
                 table_name = r.to_id[len("table_"):]
                 entity_index[r.to_id] = Entity(id=r.to_id, type="Table", name=table_name)
@@ -318,14 +411,14 @@ class Step04Assembler:
             for rel in output.relations:
                 by_type_from.setdefault((rel.type, rel.from_id), []).append(rel)
             for tr in output.traces:
-                evs: List[Evidence] = []
+                trace_evs: List[Evidence] = []
                 rid = tr.route
                 scr = tr.screen
                 # renders
                 if rid and scr:
                     for rel in by_type_from.get(("renders", rid), []):
                         if rel.to_id == scr:
-                            evs.extend(rel.evidence)
+                            trace_evs.extend(rel.evidence)
                             break
                 # handlesRoute + CRUD when present
                 method_id = None
@@ -334,12 +427,12 @@ class Step04Assembler:
                 if rid and method_id:
                     for rel in by_type_from.get(("handlesRoute", rid), []):
                         if rel.to_id == method_id:
-                            evs.extend(rel.evidence)
+                            trace_evs.extend(rel.evidence)
                             break
                     # CRUD edges from method
                     for t in ("readsFrom", "writesTo", "deletesFrom"):
                         for rel in by_type_from.get((t, method_id), []):
-                            evs.extend(rel.evidence)
+                            trace_evs.extend(rel.evidence)
                 # CRUD edges from JSPs in path (screen + chain)
                 jsp_ids: List[str] = [scr] if scr else []
                 if tr.path:
@@ -349,8 +442,8 @@ class Step04Assembler:
                 for t in ("readsFrom", "writesTo", "deletesFrom"):
                     for jsp_id in jsp_ids:
                         for rel in by_type_from.get((t, jsp_id), []):
-                            evs.extend(rel.evidence)
-                tr.evidence = self.evidence.dedupe_evidence(evs)
+                            trace_evs.extend(rel.evidence)
+                tr.evidence = self.evidence.dedupe_evidence(trace_evs)
 
         # Compute coverage stats
         routes_total = sum(1 for e in output.entities if e.type == "Route")
@@ -363,7 +456,7 @@ class Step04Assembler:
             if getattr(e, 'type', None) == "Route":
                 try:
                     attrs = getattr(e, 'attributes', {}) or {}
-                except Exception:
+                except (AttributeError, TypeError):
                     attrs = {}
                 # If route already has a handlesRoute relation, skip; otherwise infer handler
                 if e.id not in handles_by_route:
@@ -388,6 +481,9 @@ class Step04Assembler:
         db_edge_coverage = (len(db_sources_with_edges & method_or_jsp_entities) / db_sources_total) if db_sources_total > 0 else 0.0
 
         roles_applied_count = sum(1 for r in output.relations if r.type == "securedBy")
+        # Business rules stats
+        rules_total = sum(1 for e in output.entities if e.type == "Rule")
+        routes_with_rules = len({r.from_id for r in output.relations if r.type == "validatedBy" and isinstance(r.from_id, str) and r.from_id.startswith("route_")})
 
         # Additional JSP-security counters (NEXT_STEPS requirement)
         # Count JSP files present in entities and how many have securedBy relations
@@ -414,5 +510,8 @@ class Step04Assembler:
             "jsp_files_secured": jsp_files_secured,
             "unique_secured_roles_count": unique_secured_roles_count,
             "routes_secured_from_jsps": routes_secured_from_jsps,
+            # Business rules
+            "rules_total": rules_total,
+            "routes_with_rules": routes_with_rules,
         }
         return output

@@ -229,6 +229,33 @@ class JavaParser(BaseParser):
                 included_packages=included_packages,
                 exclude_same_package=exclude_same_package
             )
+            # NEW: Emit java_security mappings from structural_data.java_security_checks
+            for sec in structural_data.get("java_security_checks", []) or []:
+                try:
+                    pkg = structural_data.get("package", "") or ""
+                    cls = sec.get("class_name", "") or ""
+                    mtd = sec.get("method_name", "") or ""
+                    from_ref = f"{pkg}.{cls}.{mtd}" if pkg else f"{cls}.{mtd}" if cls else (structural_data.get("file_path") or "unknown")
+                    attrs = {
+                        "token_type": sec.get("token_type"),
+                        "tokens": sec.get("tokens"),
+                        "file_path": sec.get("file_path"),
+                        "line": sec.get("line"),
+                        "method_line_start": sec.get("method_line_start"),
+                        "method_line_end": sec.get("method_line_end"),
+                        "raw_text": sec.get("raw_text"),
+                        "emits_xhtml": str(bool(sec.get("emits_xhtml")))
+                    }
+                    code_mappings.append(CodeMapping(
+                        from_reference=from_ref,
+                        to_reference=from_ref,
+                        mapping_type="java_security",
+                        framework="java",
+                        semantic_category=SemanticCategory.CROSS_CUTTING,
+                        attributes=attrs
+                    ))
+                except (KeyError, TypeError, ValueError):
+                    continue
             java_details.code_mappings = code_mappings
 
             # self.logger.debug("Completed parsing file %s: framework=%s, code_mappings=%d, validation_rules=%d",

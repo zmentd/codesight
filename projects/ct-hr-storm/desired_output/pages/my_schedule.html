@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>My Schedule Page Object</title>
+<style>
+ body { font-family: Arial, sans-serif; margin:1.2rem; line-height:1.4; }
+ h1 { margin-top:0; }
+ h2 { margin-top:2.2rem; border-bottom:2px solid #ccc; padding-bottom:.3rem; }
+ pre.json { background:#f5f5f5; padding:1rem; border:1px solid #ddd; border-radius:6px; overflow:auto; }
+ table { width:100%; border-collapse:collapse; margin:.6rem 0 1.4rem; }
+ th, td { text-align:left; padding:6px 8px; border:1px solid #e2e2e2; vertical-align:top; }
+ th { background:#fafafa; font-size:.75rem; letter-spacing:.5px; text-transform:uppercase; }
+ code { background:#eee; padding:2px 4px; border-radius:4px; font-size:.85em; }
+ .badge { display:inline-block; background:#333; color:#fff; padding:2px 6px; border-radius:4px; font-size:.65rem; margin-left:.4rem; text-transform:uppercase; letter-spacing:.5px; }
+ .section-note { font-size:.8rem; color:#555; }
+ .warn { color:#b54700; font-weight:600; }
+ details { margin:.4rem 0 1rem; }
+ summary { cursor:pointer; font-weight:600; }
+ .grid { display:grid; gap:1.2rem; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); }
+ .card { border:1px solid #d7d7d7; border-radius:8px; padding:1rem .95rem 1.05rem; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+ .card h3 { margin:.1rem 0 .65rem; font-size:1rem; }
+ .small { font-size:.75rem; color:#666; }
+ footer { margin-top:3rem; font-size:.7rem; color:#666; }
+</style>
+</head>
+<body>
+<h1>My Schedule – Page Object</h1>
+<p>This document loads canonical page metadata from <code>my_schedule_page.json</code>. It is a structured representation (description, inputs, actions, services, security) for the <strong>ScheduleLauncher.jsp</strong> experience reached through the <em>My Schedule</em> menu / Assignments subtree.</p>
+<div id="load-status">Loading JSON…</div>
+<section id="description-section"></section>
+<section id="technical-section"></section>
+<section id="forms-section"></section>
+<section id="actions-section"></section>
+<section id="services-section"></section>
+<section id="javascript-section"></section>
+<section id="security-section"></section>
+<section id="requirements-section"></section>
+<section id="open-questions-section"></section>
+<footer>Renderer for page objects. Update <code>pages/my_schedule_page.json</code> to modify content.</footer>
+<script>
+(function(){
+  const JSON_PATH = 'my_schedule_page.json';
+  const statusEl = document.getElementById('load-status');
+  function el(tag, cls, txt){ const e=document.createElement(tag); if(cls) e.className=cls; if(txt!==undefined) e.textContent=txt; return e; }
+  function table(headers, rows){ const t=document.createElement('table'); const thead=document.createElement('thead'); const trh=document.createElement('tr'); headers.forEach(h=>{ const th=document.createElement('th'); th.textContent=h; trh.appendChild(th); }); thead.appendChild(trh); t.appendChild(thead); const tbody=document.createElement('tbody'); rows.forEach(r=>{ const tr=document.createElement('tr'); r.forEach(c=>{ const td=document.createElement('td'); if(c instanceof Node) td.appendChild(c); else td.textContent=c; tr.appendChild(td); }); tbody.appendChild(tr); }); t.appendChild(tbody); return t; }
+  function section(id, title){ const s=document.getElementById(id); if(!s) return null; if(!s.querySelector('h2')){ const h=document.createElement('h2'); h.textContent=title; s.appendChild(h);} return s; }
+
+  fetch(JSON_PATH, {cache:'no-store'})
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(data=>{
+      statusEl.remove();
+      const descSec = section('description-section','Business Description');
+      descSec.appendChild(el('p',null,data.description||''));
+      const techSec = section('technical-section','Technical Details');
+      if(data.technicalDescription){ techSec.appendChild(el('p',null,data.technicalDescription)); }
+      const formsSec = section('forms-section','Form & Data Elements');
+      if(data.forms){
+        if(Array.isArray(data.forms.inputs)){
+          formsSec.appendChild(el('h3',null,'Request Parameters')); formsSec.appendChild(table(['Name','Type','Purpose'], data.forms.inputs.map(i=>[i.name,i.type,i.purpose])));
+        }
+        if(Array.isArray(data.forms.derived)){
+          formsSec.appendChild(el('h3',null,'Derived Values')); formsSec.appendChild(table(['Name','Source','Purpose'], data.forms.derived.map(i=>[i.name,i.source,i.purpose])));
+        }
+        if(Array.isArray(data.forms.readOnlySession)){
+          formsSec.appendChild(el('h3',null,'Session Read-Only Attributes')); formsSec.appendChild(table(['Name','Purpose'], data.forms.readOnlySession.map(i=>[i.name,i.purpose])));
+        }
+      }
+      const actSec = section('actions-section','Actions');
+      if(Array.isArray(data.actions)) actSec.appendChild(table(['Name','Trigger','Logic'], data.actions.map(a=>[a.name,a.trigger,a.logic])));
+      const svcSec = section('services-section','Service Calls / Java Interactions');
+      if(Array.isArray(data.serviceCalls)) svcSec.appendChild(table(['Call','Type / Params','Usage'], data.serviceCalls.map(c=>[c.call, (c.type?c.type:'Params: '+(c.parameters||[]).join(', ')), c.resultUsage])));
+      const jsSec = section('javascript-section','JavaScript Integration');
+      if(data.javascriptIntegration){ jsSec.appendChild(table(['Parent Function','Dependency'], [[data.javascriptIntegration.parentFunction, data.javascriptIntegration.dependency]])); }
+      const secSec = section('security-section','Security');
+      if(data.security){
+        if(data.security.sessionCheck) secSec.appendChild(el('p',null,'Session Check: '+data.security.sessionCheck));
+        if(Array.isArray(data.security.permissions)) secSec.appendChild(table(['Permissions / Notes'], data.security.permissions.map(p=>[p])));
+      }
+      const reqSec = section('requirements-section','Requirements');
+      if(data.requirements){
+        if(data.requirements.traceability){ reqSec.appendChild(el('p','small','Traceability: '+data.requirements.traceability)); }
+        function renderReqGroup(label, items){
+          if(!Array.isArray(items) || !items.length) return;
+            reqSec.appendChild(el('h3',null,label));
+            let cols = ['ID','Statement'];
+            if(items.some(i=>i.source)) cols.push('Source');
+            if(items.some(i=>i.category)) cols.push('Category');
+            if(items.some(i=>i.impact)) cols.push('Impact');
+            const rows = items.map(i=>{
+              const r=[i.id||'', i.statement||''];
+              if(cols.includes('Source')) r.push(i.source||'');
+              if(cols.includes('Category')) r.push(i.category||'');
+              if(cols.includes('Impact')) r.push(i.impact||'');
+              return r;
+            });
+            reqSec.appendChild(table(cols, rows));
+        }
+        renderReqGroup('Validation', data.requirements.validation);
+        renderReqGroup('Business Logic', data.requirements.businessLogic);
+        renderReqGroup('Security', data.requirements.security);
+        renderReqGroup('Data', data.requirements.data);
+        renderReqGroup('User Experience', data.requirements.ux);
+        renderReqGroup('Performance', data.requirements.performance);
+        renderReqGroup('Non-Functional', data.requirements.nonFunctional);
+        renderReqGroup('Gaps', data.requirements.gaps);
+      }
+      const oqSec = section('open-questions-section','Open Questions / Follow-ups');
+      if(Array.isArray(data.openQuestions)) oqSec.appendChild(table(['Pending Clarification'], data.openQuestions.map(q=>[q])));
+    })
+    .catch(err=>{ statusEl.textContent = 'Failed to load JSON: '+err.message; statusEl.className='warn'; });
+})();
+</script>
+</body>
+</html>

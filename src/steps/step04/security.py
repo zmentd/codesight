@@ -4,6 +4,7 @@ import os
 import re
 from typing import Dict, List, Set, Tuple
 
+from config.config import Config
 from domain.java_details import JavaClass, JavaDetails
 from domain.jsp_details import JspDetails
 from domain.step02_output import Step02AstExtractorOutput
@@ -18,6 +19,27 @@ class SecurityBuilder:
     def __init__(self) -> None:
         self.evidence = EvidenceUtils()
 
+    # Shared role canonicalizer for consistent IDs/names across sources
+    @staticmethod
+    def canonicalize_role_name(name: str | None) -> str | None:
+        if not name:
+            return None
+        s = name.strip()
+        # Strip leading 'role_' prefix (case-insensitive) while preserving case of the remainder
+        if s.lower().startswith("role_"):
+            s = s[len("role_"):]
+        # Preserve original case for ordinary roles (Admin, Manager, Auditor, HR, etc.)
+        # Clean up surrounding punctuation/whitespace only
+        cleaned = re.sub(r"[^A-Za-z0-9_:\.-]+", "", s)
+        key_lower = cleaned.lower()
+        # Known aliases/helpers map to specific casing
+        aliases = {
+            "getsecurity": "getSecurity",
+            "unauthorizeduse": "unauthorizedUse",
+            "security": "security",
+        }
+        return aliases.get(key_lower, cleaned)
+
     def build_roles_allowed(self, java: JavaDetails) -> List[Relation]:
         relations: List[Relation] = []
         for cls in java.classes:
@@ -25,11 +47,14 @@ class SecurityBuilder:
             if class_roles:
                 cls_id = f"class_{cls.package_name}.{cls.class_name}"
                 for role in class_roles:
+                    canon = self.canonicalize_role_name(role)
+                    if not canon:
+                        continue
                     relations.append(
                         Relation(
-                            id=f"rel_{cls_id}->securedBy:{role}",
+                            id=f"rel_{cls_id}->securedBy:{canon}",
                             from_id=cls_id,
-                            to_id=f"role_{role}",
+                            to_id=f"role_{canon}",
                             type="securedBy",
                             confidence=0.9,
                             rationale="@RolesAllowed on class",
@@ -40,11 +65,14 @@ class SecurityBuilder:
                 if method_roles:
                     method_id = f"method_{cls.package_name}.{cls.class_name}#{m.name}"
                     for role in method_roles:
+                        canon = self.canonicalize_role_name(role)
+                        if not canon:
+                            continue
                         relations.append(
                             Relation(
-                                id=f"rel_{method_id}->securedBy:{role}",
+                                id=f"rel_{method_id}->securedBy:{canon}",
                                 from_id=method_id,
-                                to_id=f"role_{role}",
+                                to_id=f"role_{canon}",
                                 type="securedBy",
                                 confidence=0.95,
                                 rationale="@RolesAllowed on method",
@@ -96,19 +124,16 @@ class SecurityBuilder:
                             # Prefer numeric 'value' in attributes if present
                             try:
                                 val = attrs.get('value') if isinstance(attrs.get('value'), int) else attrs.get('tokens') or None
-                                # normalize to string
                                 if isinstance(val, (list, set)) and val:
                                     val = next(iter(val))
                                 if val is None:
-                                    # fallback to tokens
                                     val = toks[0] if toks else None
                                 if val is not None:
                                     role_name = f"group_{str(val)}"
                                     roles.add(role_name)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 continue
                         elif token_type == 'helper_call':
-                            # Map helper calls conservatively to a helper-based role id
                             try:
                                 helper = (attrs.get('helper') or '').strip()
                                 if helper:
@@ -116,16 +141,19 @@ class SecurityBuilder:
                                     safe = helper.replace('.', '_')
                                     role_name = f"helper_{safe}"
                                     roles.add(role_name)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 continue
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         continue
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
                 # best-effort; ignore mapping consumption failures
                 pass
 
             if not roles:
                 continue
+
+            # Canonicalize roles now
+            roles = {r for r in (SecurityBuilder.canonicalize_role_name(x) for x in roles) if r}
 
             # Ensure a JSP entity for this file
             stem = os.path.splitext(os.path.basename(f.path))[0]
@@ -163,7 +191,7 @@ class SecurityBuilder:
                                     # prefer parsing via extractor for access-like expressions
                                     try:
                                         parsed = SecurityBuilder._extract_roles_from_expression(v)
-                                    except Exception:
+                                    except (re.error, AttributeError, TypeError, ValueError):
                                         parsed = set()
                                     # look for quoted role tokens or parsed roles or simple substring match
                                     if role in parsed or f"'{role}'" in v or f'"{role}"' in v or role in v:
@@ -179,9 +207,9 @@ class SecurityBuilder:
                                 end_line = getattr(t, 'end_line', None)
                                 evs.append(self.evidence.build_evidence_from_file(f.path, line, end_line))
                                 break
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             continue
-                except Exception:
+                except (AttributeError, TypeError, ValueError):
                     pass
 
                 # 2) Check EL expressions
@@ -202,9 +230,9 @@ class SecurityBuilder:
                                     end_line = getattr(el, 'end_line', None)
                                     evs.append(self.evidence.build_evidence_from_file(f.path, line, end_line))
                                     break
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 continue
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         pass
 
                 # 3) Check embedded Java/scriptlet blocks
@@ -224,15 +252,14 @@ class SecurityBuilder:
                                     end_line = getattr(blk, 'end_line', None)
                                     evs.append(self.evidence.build_evidence_from_file(f.path, line, end_line))
                                     break
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 continue
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         pass
 
-                # 4) If still no parsed-element span evidence, fall back to scanning CodeMappings for span info (existing behavior)
+                # 4) Fallback to CodeMappings span info
                 if not evs:
                     try:
-                        # Scan CodeMappings for a matching role token to get span info
                         for cm in getattr(details, 'code_mappings', []) or []:
                             try:
                                 mtype = getattr(cm, 'mapping_type', None) or cm.__dict__.get('mapping_type')
@@ -243,15 +270,12 @@ class SecurityBuilder:
                                 toks = attrs.get('tokens') or []
                                 if isinstance(toks, (str, int)):
                                     toks = [str(toks)]
-                                # match role tokens
                                 if token_type == 'role' and any(str(role) == str(tk) or str(role) in str(tk) for tk in toks):
                                     line = attrs.get('line')
                                     end_line = attrs.get('end_line')
                                     evs.append(self.evidence.build_evidence_from_file(f.path, line, end_line))
                                     break
-                                # group_level and helper_call: match by synthesized role name
                                 if token_type in ('group_level', 'helper_call'):
-                                    # attempt to synthesize same role_name mapping as above
                                     if token_type == 'group_level':
                                         val = attrs.get('value') if isinstance(attrs.get('value'), int) else (attrs.get('tokens') or None)
                                         candidate = None
@@ -260,7 +284,7 @@ class SecurityBuilder:
                                                 candidate = f"group_{next(iter(val))}"
                                             elif val is not None:
                                                 candidate = f"group_{str(val)}"
-                                        except Exception:
+                                        except (AttributeError, TypeError, ValueError):
                                             candidate = None
                                         if candidate and candidate == role:
                                             line = attrs.get('line')
@@ -276,12 +300,11 @@ class SecurityBuilder:
                                                 end_line = attrs.get('end_line')
                                                 evs.append(self.evidence.build_evidence_from_file(f.path, line, end_line))
                                                 break
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 continue
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         pass
 
-                # If we found no span-level evidence, fall back to file-level source_ref evidence
                 if not evs:
                     evs = [self.evidence.build_evidence_from_source_ref({"file": f.path})]
 
@@ -291,12 +314,88 @@ class SecurityBuilder:
                         from_id=jsp_id,
                         to_id=f"role_{role}",
                         type="securedBy",
-                        confidence=0.75,
+                        confidence=0.9,
                         evidence=evs,
                         rationale="JSP security tag/EL or Step02 jsp_security mapping",
                     )
                 )
         return jsp_entities, relations
+
+    def build_java_security(self, java: JavaDetails) -> List[Relation]:
+        """Consume Step02 Java code_mappings with mapping_type == 'java_security' and emit securedBy relations.
+        - Uses CodeMapping.from_reference as the method FQN (pkg.Class.method) to build method_ IDs.
+        - Maps token_type 'role' to role_{token}, 'group_level' to role_group_{value}, 'helper_call' to role_helper_{helper}.
+        - Adds file:line evidence from CodeMapping.attributes where available.
+        """
+        relations: List[Relation] = []
+        try:
+            code_maps = getattr(java, 'code_mappings', []) or []
+            for cm in code_maps:
+                try:
+                    mtype = getattr(cm, 'mapping_type', None) or cm.__dict__.get('mapping_type')
+                    if mtype != 'java_security':
+                        continue
+                    from_ref = getattr(cm, 'from_reference', None) or cm.__dict__.get('from_reference') or ''
+                    attrs = getattr(cm, 'attributes', {}) or cm.__dict__.get('attributes', {}) or {}
+                    # Build method ID from from_reference like pkg.Class.method
+                    cls_part = ''
+                    method_name = ''
+                    if isinstance(from_ref, str) and '.' in from_ref:
+                        parts = from_ref.split('.')
+                        method_name = parts[-1]
+                        cls_part = '.'.join(parts[:-1])
+                    else:
+                        method_name = from_ref
+                        cls_part = ''
+                    if not method_name:
+                        continue
+                    method_id = f"method_{cls_part}#{method_name}" if cls_part else f"method_{method_name}"
+                    # Determine token(s)
+                    token_type = attrs.get('token_type')
+                    toks = attrs.get('tokens')
+                    if isinstance(toks, (str, int)):
+                        toks = [str(toks)]
+                    elif not isinstance(toks, list):
+                        toks = []
+                    role_names: List[str] = []
+                    if token_type == 'role':
+                        role_names = [str(t) for t in toks if str(t)]
+                    elif token_type == 'group_level':
+                        val = attrs.get('value')
+                        if isinstance(val, (int, float, str)):
+                            role_names = [f"group_{str(val)}"]
+                        elif toks:
+                            role_names = [f"group_{str(toks[0])}"]
+                    elif token_type == 'helper_call':
+                        helper = (attrs.get('helper') or '').strip()
+                        if helper:
+                            role_names = [f"helper_{helper.replace('.', '_')}"]
+                    # Canonicalize role names
+                    role_names = [r for r in (SecurityBuilder.canonicalize_role_name(x) for x in role_names) if r]
+                    # Evidence and confidence
+                    file_path = attrs.get('file_path')
+                    line = attrs.get('line')
+                    end_line = attrs.get('end_line')
+                    emits_xhtml_flag = str(attrs.get('emits_xhtml', '')).lower() in ('true', '1')
+                    confidence = 0.92 if emits_xhtml_flag else 0.86
+                    for role in role_names:
+                        rel_id = f"rel_{method_id}->securedBy:{role}"
+                        relations.append(
+                            Relation(
+                                id=rel_id,
+                                from_id=method_id,
+                                to_id=f"role_{role}",
+                                type='securedBy',
+                                confidence=confidence,
+                                evidence=[self.evidence.build_evidence_from_file(file_path, line, end_line)] if file_path else [],
+                                rationale='Java XHTML/security check'
+                            )
+                        )
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    continue
+        except (AttributeError, TypeError, ValueError):
+            return []
+        return relations
 
     @staticmethod
     def _extract_roles(annotations: List) -> List[str]:
@@ -312,9 +411,7 @@ class SecurityBuilder:
         return roles
 
     def _collect_jsp_roles(self, details: JspDetails) -> Set[str]:
-        """Collect roles from JSP details, including tag attributes, EL, scriptlets, and configured patterns.
-        Instance method so we can consult config via self.evidence.cfg if present.
-        """
+        """Collect roles from JSP details, including tag attributes, EL, scriptlets, configured patterns, and Step02 pattern hits."""
         roles: Set[str] = set()
         # From namespaced security tags
         try:
@@ -331,86 +428,100 @@ class SecurityBuilder:
                     access = attrs.get('access')
                     if isinstance(access, str):
                         roles.update(SecurityBuilder._extract_roles_from_expression(access))
-                    # Fallback: scan full_text for role expressions
-                    fx = getattr(t, 'full_text', '') or ''
-                    if fx:
-                        roles.update(SecurityBuilder._extract_roles_from_expression(fx))
-        except (AttributeError, TypeError, ValueError, re.error):
+        except (AttributeError, TypeError, ValueError):
             pass
         # From EL expressions
         try:
             for el in getattr(details, 'el_expressions', []) or []:
                 expr = getattr(el, 'expression', '') or ''
-                if expr:
-                    roles.update(SecurityBuilder._extract_roles_from_expression(expr))
-        except (AttributeError, TypeError, ValueError, re.error):
+                if not expr:
+                    continue
+                roles.update(SecurityBuilder._extract_roles_from_expression(expr))
+        except (AttributeError, TypeError, ValueError):
             pass
         # From embedded Java/scriptlets
         try:
             for blk in getattr(details, 'embedded_java', []) or []:
                 code = getattr(blk, 'code', '') or ''
-                if code:
-                    roles.update(SecurityBuilder._extract_roles_from_expression(code))
-        except (AttributeError, TypeError, ValueError, re.error):
-            pass
-
-        # From configured extra patterns (optional)
-        try:
-            cfg = getattr(self.evidence, 'cfg', None)
-            if cfg is not None:
-                patterns: List[str] = []
-                try:
-                    patterns = getattr(cfg.steps.step04.security, 'patterns', []) or []
-                except (AttributeError, TypeError):
-                    patterns = []
-                for pat in patterns:
-                    try:
-                        cre = re.compile(pat, re.IGNORECASE)
-                        # scan tag full_text, el expressions, embedded java
-                        for t in getattr(details, 'jsp_tags', []) or []:
-                            fx = getattr(t, 'full_text', '') or ''
-                            for m in cre.finditer(fx):
-                                # capture group 1 preferred, else whole match
-                                cap = m.group(1) if m.groups() else m.group(0)
-                                roles.update(SecurityBuilder._split_roles(cap))
-                        for el in getattr(details, 'el_expressions', []) or []:
-                            fx = getattr(el, 'full_text', '') or ''
-                            for m in cre.finditer(fx):
-                                cap = m.group(1) if m.groups() else m.group(0)
-                                roles.update(SecurityBuilder._split_roles(cap))
-                        for blk in getattr(details, 'embedded_java', []) or []:
-                            fx = getattr(blk, 'full_text', '') or ''
-                            for m in cre.finditer(fx):
-                                cap = m.group(1) if m.groups() else m.group(0)
-                                roles.update(SecurityBuilder._split_roles(cap))
-                    except re.error:
-                        continue
+                if not code:
+                    continue
+                # isUserInRole('ROLE') or hasRole('ROLE') or hasAnyRole('A','B')
+                roles.update(SecurityBuilder._extract_roles_from_expression(code))
         except (AttributeError, TypeError, ValueError):
             pass
-
-        return {r for r in roles if r}
+        # From configured patterns in global config (capture groups preferred)
+        try:
+            cfg = Config.get_instance()
+            patterns = getattr(cfg.steps.step04.security, 'patterns', []) or []
+            for pat in patterns:
+                try:
+                    rx = re.compile(pat)
+                except re.error:
+                    continue
+                # Scan tag full_text
+                for t in getattr(details, 'jsp_tags', []) or []:
+                    fx = getattr(t, 'full_text', '') or ''
+                    if not fx:
+                        continue
+                    for m in rx.finditer(fx):
+                        if m and m.groups():
+                            roles.add(m.group(1))
+                        elif m:
+                            roles.add(m.group(0))
+                # Scan EL full_text if available
+                for el in getattr(details, 'el_expressions', []) or []:
+                    fx = getattr(el, 'full_text', '') or ''
+                    if not fx:
+                        continue
+                    for m in rx.finditer(fx):
+                        if m and m.groups():
+                            roles.add(m.group(1))
+                        elif m:
+                            roles.add(m.group(0))
+                # Scan embedded Java/scriptlets full_text
+                for blk in getattr(details, 'embedded_java', []) or []:
+                    fx = getattr(blk, 'full_text', '') or ''
+                    if not fx:
+                        continue
+                    for m in rx.finditer(fx):
+                        if m and m.groups():
+                            roles.add(m.group(1))
+                        elif m:
+                            roles.add(m.group(0))
+        except Exception:
+            # best-effort; ignore configuration or scanning errors
+            pass
+        # From configured patterns in Step02 (pattern_hits.security)
+        try:
+            ph = getattr(details, 'pattern_hits', None)
+            if ph and getattr(ph, 'security', None):
+                for tok in ph.security:
+                    if isinstance(tok, str) and tok:
+                        roles.add(tok)
+        except (AttributeError, TypeError, ValueError):
+            pass
+        return roles
 
     @staticmethod
     def _split_roles(val: str) -> Set[str]:
-        parts = [p.strip() for p in re.split(r"[,;]", val or "")]
-        return {p.strip("'\"") for p in parts if p}
+        parts = re.split(r"[,\s]+", val.strip()) if val else []
+        return {p.strip().strip("'\"") for p in parts if p and p.strip()}
 
     @staticmethod
-    def _extract_roles_from_expression(text: str) -> Set[str]:
+    def _extract_roles_from_expression(expr: str) -> Set[str]:
         roles: Set[str] = set()
-        if not isinstance(text, str) or not text:
+        if not expr:
             return roles
-        # hasRole('ROLE_X')
-        for m in re.finditer(r"hasRole\s*\(\s*['\"]([^'\"]+)['\"]\s*\)", text, re.IGNORECASE):
-            roles.add(m.group(1))
-        # hasAnyRole('A','B')
-        for m in re.finditer(r"hasAnyRole\s*\(\s*([^\)]*)\)", text, re.IGNORECASE):
-            inside = m.group(1) or ''
-            roles.update(SecurityBuilder._split_roles(inside))
-        # isUserInRole('X')
-        for m in re.finditer(r"isUserInRole\s*\(\s*['\"]([^'\"]+)['\"]\s*\)", text, re.IGNORECASE):
-            roles.add(m.group(1))
-        # access="ROLE_A,ROLE_B" direct values (if no hasRole wrapper)
-        for m in re.finditer(r"\baccess\s*=\s*['\"]([^'\"]+)['\"]", text, re.IGNORECASE):
-            roles.update(SecurityBuilder._split_roles(m.group(1)))
+        # hasRole('A'), isUserInRole('A'), hasAnyRole('A','B')
+        try:
+            for m in re.finditer(r"hasRole\s*\(\s*['\"]([^'\"]+)['\"]\s*\)", expr):
+                roles.add(m.group(1))
+            for m in re.finditer(r"isUserInRole\s*\(\s*['\"]([^'\"]+)['\"]\s*\)", expr):
+                roles.add(m.group(1))
+            any_m = re.search(r"hasAnyRole\s*\(([^\)]*)\)", expr)
+            if any_m:
+                inside = any_m.group(1)
+                roles.update(SecurityBuilder._split_roles(inside))
+        except re.error:
+            return roles
         return roles

@@ -28,14 +28,47 @@ class Linker:
         # Normalize path for consistent evidence and attribute formatting
         norm_path = self.evidence.normalize_path(file_path) if file_path else None
         stem = os.path.splitext(os.path.basename(file_path or ""))[0]
+        
+        # Import JSP classifier
+        try:
+            from steps.step04.jsp_classifier import JspClassifier
+            classifier = JspClassifier()
+            classification = classifier.classify_jsp(file_path, details)
+        except ImportError:
+            # Fallback if classifier not available
+            classification = {
+                'jsp_function_type': 'business_screen',
+                'is_component': False,
+                'ui_complexity': 'medium',
+                'has_forms': False,
+                'has_security': False,
+                'classification_confidence': 0.7
+            }
+        
+        # Build enhanced attributes with classification
+        attributes = {
+            "file_path": norm_path,
+            "page_type": getattr(details, "page_type", None) if details else None,
+            # Add JSP classification attributes
+            "jsp_function_type": classification['jsp_function_type'],
+            "is_component": classification['is_component'],
+            "ui_complexity": classification['ui_complexity'],
+            "has_forms": classification['has_forms'],
+            "has_security": classification['has_security'],
+            "classification_confidence": classification['classification_confidence']
+        }
+        
+        # Add optional classification attributes
+        if classification.get('business_domain'):
+            attributes['business_domain'] = classification['business_domain']
+        if classification.get('navigation_role'):
+            attributes['navigation_role'] = classification['navigation_role']
+        
         return Step04Entity(
             id=f"jsp_{stem}",
             type="JSP",
             name=stem,
-            attributes={
-                "file_path": norm_path,
-                "page_type": getattr(details, "page_type", None) if details else None,
-            },
+            attributes=attributes,
             source_refs=[{"file": norm_path}],
         )
 
@@ -65,7 +98,7 @@ class Linker:
                     norm_no_lead = f"{norm_no_lead}.jsp"
                 candidates.append(norm_no_lead)
                 candidates.append(os.path.basename(norm_no_lead))
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             # Be robust if normalization fails
             pass
 
@@ -85,7 +118,7 @@ class Linker:
             q = SourceInventoryQuery(step02.source_inventory).files().detail_type("jsp").path_endswith(cand)
             try:
                 res = q.execute()
-            except Exception:
+            except (RuntimeError, ValueError, AttributeError, TypeError):
                 continue
             if res.total_count > 0:
                 f = res.items[0]
@@ -106,13 +139,13 @@ class Linker:
                         details = f.details if isinstance(f.details, JspDetails) else None
                         logger.debug("Found JSP by prefixed suffix match: %s -> %s", jsp_path, f.path)
                         return self._build_jsp_entity(f.path, details)
-                except Exception:
+                except (RuntimeError, ValueError, AttributeError, TypeError):
                     continue
 
         # As a last resort, scan all JSPs and look for a candidate substring (case-insensitive)
         try:
             files = SourceInventoryQuery(step02.source_inventory).files().detail_type("jsp").execute().items
-        except Exception:
+        except (RuntimeError, ValueError, AttributeError, TypeError):
             logger.debug("JSP inventory scan failed for path (could not list JSPs): %s", jsp_path)
             return None
 
@@ -127,7 +160,7 @@ class Linker:
                         details = f.details if isinstance(f.details, JspDetails) else None
                         logger.debug("Found JSP by substring match: %s -> %s (matched '%s')", jsp_path, fpath, lc)
                         return self._build_jsp_entity(fpath, details)
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
                 continue
 
         # Additional conservative heuristics to help diagnose misses
@@ -163,16 +196,16 @@ class Linker:
                             details = f.details if isinstance(f.details, JspDetails) else None
                             logger.debug("Found JSP by startswith match: %s -> %s (matched '%s')", jsp_path, fpath, nc)
                             return self._build_jsp_entity(fpath, details)
-                except Exception:
+                except (AttributeError, TypeError, ValueError):
                     continue
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             # never fail the entire match procedure because of our heuristics
             logger.debug("Additional heuristics failed for JSP path: %s", jsp_path)
 
         # If we reach here, we could not match. Emit diagnostic details to help troubleshooting.
         try:
             sample = [getattr(f, 'path', None) for f in files[:10]]
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             sample = None
         logger.debug("Could not resolve JSP path '%s'. Tried candidates: %s. JSP sample: %s", jsp_path, cand_ordered, sample)
         return None
@@ -305,11 +338,11 @@ class Linker:
         - case-insensitive comparison to Route.attributes['action'] (already normalized by RouteBuilder)
         """
         jsp_entities: Dict[str, Step04Entity] = {}
-        relations: List[Step04Relation] = {}
+        relations: List[Step04Relation] = []
 
         try:
             files = SourceInventoryQuery(step02.source_inventory).files().detail_type("jsp").execute().items
-        except Exception:
+        except (RuntimeError, ValueError, AttributeError, TypeError):
             return jsp_entities, relations
 
         unmatched: List[Dict[str, object]] = []
@@ -358,7 +391,7 @@ class Linker:
                             if act_norm == tok_cmp or act_norm == tok_base or tok_cmp.endswith('/' + act_norm) or tok_cmp.endswith(act_norm) or (act_norm and act_norm in tok_cmp):
                                 matched_route = r
                                 break
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError):
                             continue
 
                     if not matched_route:
@@ -378,9 +411,9 @@ class Linker:
                                     candidates.append({"route_id": r2.id, "action": a_norm})
                                     if len(candidates) >= 12:
                                         break
-                                except Exception:
+                                except (AttributeError, TypeError, ValueError):
                                     continue
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError):
                             candidates = []
                         token_entry = {"token": tok, "source": getattr(f, 'path', None), "candidates": candidates}
                         unmatched.append(token_entry)
@@ -429,12 +462,12 @@ class Linker:
                                         # Also update the canonical 'method' attribute so downstream exports reflect the resolution
                                         try:
                                             matched_route.attributes['method'] = resolved
-                                        except Exception:
+                                        except (AttributeError, TypeError):
                                             # be robust if attributes structure is unexpected
                                             matched_route.attributes.update({'method': resolved})
                             except re.error:
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         pass
 
                     # Prefer span evidence from the CodeMapping attributes when present
@@ -447,7 +480,7 @@ class Linker:
                             attrs = getattr(cm, 'attributes', {}) or cm.__dict__.get('attributes', {}) or {}
                             line = attrs.get('line')
                             end_line = attrs.get('end_line')
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError):
                             line = None
                             end_line = None
 
@@ -455,7 +488,7 @@ class Linker:
                             evid = [self.evidence.build_evidence_from_file(f.path, line, end_line)]
                         else:
                             evid = [self.evidence.build_evidence_from_source_ref({"file": f.path})]
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         evid = [self.evidence.build_evidence_from_source_ref({"file": f.path})]
 
                     relations.append(
@@ -474,7 +507,7 @@ class Linker:
                     try:
                         sb = SecurityBuilder()
                         jsp_roles = sb._collect_jsp_roles(details) if details else set()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         jsp_roles = set()
 
                     for role in sorted(jsp_roles):
@@ -489,13 +522,17 @@ class Linker:
                                     from_id=matched_route.id,
                                     to_id=f"role_{role}",
                                     type="securedBy",
-                                    confidence=0.75,
+                                    confidence=0.9,
                                     evidence=sec_evid,
                                     rationale="Propagated from JSP securedBy via invokesRoute",
                                 )
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError):
                             continue
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    continue
+
+        return jsp_entities, relations
 
 
 

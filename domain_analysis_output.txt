@@ -1,0 +1,141 @@
+=== Analyzing Business Domains for ct-hr-storm ===
+
+Found 595 JSP entities in Step04
+Found 571 JSP files with valid paths
+Found 76 route->JSP mappings
+
+=== JSP ANALYSIS ===
+Total JSP entities: 595
+Valid JSP paths: 571
+Route->JSP mappings: 76
+
+=== DOMAIN PATTERNS ===
+  asl: 236 screens
+  dsl: 58 screens
+  gsl: 271 screens
+  isl: 6 screens
+
+=== SUBDOMAIN PATTERNS ===
+  asl/approving: 20 screens
+  asl/extras: 4 screens
+  asl/general: 9 screens
+  asl/help: 3 screens
+  asl/managing: 110 screens
+  asl/reporting: 22 screens
+  asl/scheduling: 59 screens
+  asl/secondApprovals: 2 screens
+  asl/setup: 4 screens
+  dsl/order: 5 screens
+  dsl/rdt: 3 screens
+  dsl/resources: 6 screens
+  dsl/tour: 42 screens
+  gsl/activitytype: 2 screens
+  gsl/approversPool: 4 screens
+  gsl/budget: 4 screens
+  gsl/city: 3 screens
+  gsl/client: 25 screens
+  gsl/codegroup: 3 screens
+  gsl/collections: 16 screens
+  gsl/company: 9 screens
+  gsl/contract: 2 screens
+  gsl/contractgroups: 9 screens
+  gsl/contractrevision: 13 screens
+  gsl/cost: 9 screens
+  gsl/costcenter: 2 screens
+  gsl/daysrulesgroups: 2 screens
+  gsl/daytype: 7 screens
+  gsl/email: 4 screens
+  gsl/freelancer: 3 screens
+  gsl/group: 26 screens
+  gsl/invoice: 3 screens
+  gsl/mealindicators: 2 screens
+  gsl/message: 3 screens
+  gsl/notification: 4 screens
+  gsl/paytransaction: 3 screens
+  gsl/paytransactionindicators: 2 screens
+  gsl/quartzcp: 8 screens
+  gsl/quote: 3 screens
+  gsl/resourceManagersPool: 2 screens
+  gsl/salarylevel: 10 screens
+  gsl/scene: 13 screens
+  gsl/system: 7 screens
+  gsl/task: 5 screens
+  gsl/timezone: 2 screens
+  gsl/tkcontract: 10 screens
+  gsl/user: 29 screens
+  gsl/vacationplanner: 5 screens
+  gsl/workflow: 5 screens
+  isl/message: 3 screens
+
+=== SAMPLE JSP PATHS ===
+  /jsp/gsl/activityFlag/ActivityFlagDetails.jsp
+  /jsp/gsl/earningcodes/EarningCodeDetails.jsp
+  /jsp/gsl/codegroup/CodeGroupDetails.jsp
+  /jsp/gsl/codegroup/indicators/IndicatorDetails.jsp
+  /jsp/gsl/codegroup/code/CodeDetails.jsp
+  /jsp/gsl/timezone/TimeZoneDetails.jsp
+  /jsp/gsl/overTime/OverTimeTypeDetails.jsp
+  /jsp/gsl/timezone/gmtoffset/GMTOffset.jsp
+  /jsp/gsl/quartzcp/feedstatus/feedstatus.jsp
+  /jsp/gsl/TKHoliday/TKHolidays.jsp
+  /jsp/gsl/holidayocurrences/HolidaysOcurrences.jsp
+  /jsp/gsl/paytransaction/payTransactions.jsp
+  /jsp/gsl/paytransaction/payTransactionsDetails.jsp
+  /jsp/gsl/paytransactionindicators/PayTransactionIndicatorsDetails.jsp
+  /jsp/gsl/paytransactionindicators/PayTransactionIndicatorsList.jsp
+  /jsp/gsl/approversPool/ApproversPoolDetails.jsp
+  /jsp/gsl/resourceManagersPool/ManagersPoolDetails.jsp
+  /jsp/gsl/group/setup/groups.jsp
+  /jsp/gsl/workflow/setup/Details.jsp
+  /jsp/gsl/group/skill/status/skillStatusList.jsp
+Found 86 route entities
+
+=== ROUTE ANALYSIS ===
+Total routes: 86
+
+=== ACTION PATTERNS ===
+  ActivityFlag: 1 routes
+  Code: 1 routes
+  EarningCode: 1 routes
+  GMTOffset: 1 routes
+  Groups: 1 routes
+  Indicator: 1 routes
+  IndicatorsCodeGroup: 1 routes
+  OverTime: 1 routes
+  PayTransactions: 1 routes
+  ShowGrps: 1 routes
+  SkillShows: 1 routes
+  TimeZone: 1 routes
+
+=== ACTION CLASS PATTERNS ===
+  action: 52 action classes
+  feedstatus: 1 action classes
+  multiplecalendar: 1 action classes
+
+=== SAMPLE ROUTE->JSP MAPPINGS ===
+  ActivityFlagCatalog -> /jsp/gsl/activityFlag/ActivityFlagDetails.jsp
+  EarningCodeCatalog -> /jsp/gsl/earningcodes/EarningCodeDetails.jsp
+  IndicatorsCodeGroupCatalog -> /jsp/gsl/codegroup/CodeGroupDetails.jsp
+  IndicatorCatalog -> /jsp/gsl/codegroup/indicators/IndicatorDetails.jsp
+  CodeCatalog -> /jsp/gsl/codegroup/code/CodeDetails.jsp
+  TimeZoneCatalog -> /jsp/gsl/timezone/TimeZoneDetails.jsp
+  OverTimeCatalog -> /jsp/gsl/overTime/OverTimeTypeDetails.jsp
+  GMTOffsetCatalog -> /jsp/gsl/timezone/gmtoffset/GMTOffset.jsp
+  FeedStatus -> /jsp/gsl/quartzcp/feedstatus/feedstatus.jsp
+  TKHolidays -> /jsp/gsl/TKHoliday/TKHolidays.jsp
+
+=== PROPOSED BUSINESS DOMAINS ===
+  Domain: asl
+    - JSP screens: 236
+    - Routes: 0
+  Domain: dsl
+    - JSP screens: 58
+    - Routes: 0
+  Global System Library / Configuration
+    - JSP screens: 271
+    - Routes: 0
+  Domain: isl
+    - JSP screens: 6
+    - Routes: 0
+
+Detailed analysis saved to: D:\Prj\NBCU\storm\codesight\projects\ct-hr-storm\output\business_domain_analysis.json

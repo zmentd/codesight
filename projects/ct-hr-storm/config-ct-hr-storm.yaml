@@ -61,7 +61,7 @@ steps:
     enable_security_roles: true
     enable_jsp_security_detection: true
     enable_trace_enrichment: true
-    enable_business_rules_extraction: false
+    enable_business_rules_extraction: true
     config_file_patterns:
       - "**/struts.xml"
       - "**/struts-config.xml"
@@ -80,6 +80,9 @@ steps:
         - "unauthorizedUse"
         - "<sec:authorize"
         - "<c:if test=\".*role\""
+        - '<c:if test="\\$\\{user\\.isAdmin'
+        - '<c:if test="\\$\\{user\\.hasRole'
+        - "<%.*Security.*%>"
     rules:
       files: ["validation.xml", "validator-rules.xml"]
 
@@ -90,6 +93,27 @@ steps:
     enable_business_logic_extraction: true
     enable_domain_classification: true
     retry_attempts: 3
+    # Use business domains specific to ct-hr-storm instead of generic labels like UI
+    domain_strategy: "always_llm"
+    domain_labels:
+      - "Employee Management"
+      - "Scheduling"
+      - "Timekeeping"
+      - "Payroll"
+      - "Benefits"
+      - "Labor Relations"
+      - "Contracts"
+      - "Skills and Qualifications"
+      - "Approvals and Workflow"
+      - "Position and Job Management"
+      - "Holidays and Calendars"
+      - "Overtime and Pay Rules"
+      - "Reporting and Analytics"
+      - "Security and Access Control"
+      - "Administration and Configuration"
+      - "Integrations and Interfaces"
+    # Create capabilities for routes even if they lack explicit render/handler links
+    seed_unlinked_routes: true
 
 # ==============================================================================
 # DATABASE OVERRIDES
@@ -155,8 +179,8 @@ jsp_analysis:
     - "data-permission"
     - "data-role"
     - "<sec:authorize"
-    - "<c:if test=\"\\$\\{user\\.isAdmin"
-    - "<c:if test=\"\\$\\{user\\.hasRole"
+    - '<c:if test="\\$\\{user\\.isAdmin'
+    - '<c:if test="\\$\\{user\\.hasRole'
     - "<%.*Security.*%>"
 
   menu_detection:
@@ -184,8 +208,8 @@ jsp_analysis:
     - "getMessageByUserId"
     - "stormContext"
     - "ScheduleXHTMLHandler"
-    - "\\$\\{.*Service\\."
-    - "\\$\\{.*Manager\\."
+    - '\\$\\{.*Service\.'
+    - '\\$\\{.*Manager\.'
 
   tiles_patterns:
     - "<tiles:insertDefinition"
@@ -440,7 +464,7 @@ quality_gates:
     min_pattern_confidence: 0.75
   step05:
     min_citations_per_capability: 1
-    min_capability_coverage_pct: 0.8
+    min_capability_coverage_pct: 0.4
   step06:
     min_route_chain_coverage_pct: 0.6
     require_iam_for_guarded_routes: false

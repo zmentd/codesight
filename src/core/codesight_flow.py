@@ -45,15 +45,19 @@ class CodeSightFlow:
         from steps.step02.step02_ast_extractor import Step02ASTExtractor
         from steps.step03.step03_embeddings_processor import Step03EmbeddingsProcessor
         from steps.step04.step04_pattern_analysis import Step04PatternAnalysis
+        from steps.step05.step05_capability_assembly import Step05CapabilityAssembly
+        from steps.step06.step06_document_assembly import Step06DocumentAssembly
 
         # Create step nodes
         step01 = FilesystemAnalyzer("step01_filesystem_analyzer")
         step02 = Step02ASTExtractor("step02_ast_extractor")
         step03 = Step03EmbeddingsProcessor("step03_embeddings_processor")
         step04 = Step04PatternAnalysis("step04_pattern_analysis")
+        step05 = Step05CapabilityAssembly("step05_capability_assembly")
+        step06 = Step06DocumentAssembly("step06_document_assembly")
 
         # Chain
-        step01 >> step02 >> step03 >> step04  # type: ignore[expression-value,unused-ignore] # pylint: disable=pointless-statement
+        step01 >> step02 >> step03 >> step04 >> step05 >> step06  # type: ignore[expression-value,unused-ignore] # pylint: disable=pointless-statement
         
         flow = Flow(start=step01)
         
@@ -86,7 +90,7 @@ class CodeSightFlow:
                     raise RuntimeError("Failed to create flow")
                 
                 self.logger.info("🚀 Executing CodeSight pipeline...")
-                self.logger.info("📋 Pipeline steps: Step01 (Filesystem Analysis) → Step02 (AST Extraction)")
+                self.logger.info("📋 Pipeline steps: Step01 → Step02 → Step03 → Step04 → Step05 → Step06")
                 
                 self._flow.run(shared_state)
                 
@@ -116,12 +120,14 @@ class CodeSightFlow:
         Uses config.get_output_path_for_step to locate artifacts and populates the
         expected shared_state keys with {"output_data": <json dict>}.
         """
-        step_order = ["step01", "step02", "step03", "step04"]
+        step_order = ["step01", "step02", "step03", "step04", "step05", "step06"]
         node_ids = {
             "step01": "step01_filesystem_analyzer",
             "step02": "step02_ast_extractor",
             "step03": "step03_embeddings_processor",
             "step04": "step04_pattern_analysis",
+            "step05": "step05_capability_assembly",
+            "step06": "step06_document_assembly",
         }
 
         # Compute all prerequisite steps for the requested selection
@@ -177,12 +183,16 @@ class CodeSightFlow:
         from steps.step02.step02_ast_extractor import Step02ASTExtractor
         from steps.step03.step03_embeddings_processor import Step03EmbeddingsProcessor
         from steps.step04.step04_pattern_analysis import Step04PatternAnalysis
+        from steps.step05.step05_capability_assembly import Step05CapabilityAssembly
+        from steps.step06.step06_document_assembly import Step06DocumentAssembly
 
         registry = {
             "step01": lambda: FilesystemAnalyzer("step01_filesystem_analyzer"),
             "step02": lambda: Step02ASTExtractor("step02_ast_extractor"),
             "step03": lambda: Step03EmbeddingsProcessor("step03_embeddings_processor"),
             "step04": lambda: Step04PatternAnalysis("step04_pattern_analysis"),
+            "step05": lambda: Step05CapabilityAssembly("step05_capability_assembly"),
+            "step06": lambda: Step06DocumentAssembly("step06_document_assembly"),
         }
 
         # Initial shared state
